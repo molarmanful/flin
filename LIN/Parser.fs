@@ -1,17 +1,16 @@
-module LIN.Parser
+module LIN.P
 
 #if INTERACTIVE
 #r "nuget: FParsec"
 #r "nuget: MathNet.Numerics.FSharp"
 #endif
 
-open System
+open System.Text
+open FSharpPlus
 open FParsec
 open MathNet.Numerics
 
-type Parser<'t> = Parser<'t, unit>
-
-let ws: Parser<_> =
+let ws =
     skipManySatisfy (function
         | ' '
         | '\t' -> true
@@ -23,17 +22,29 @@ let onum =
 
 let pnum =
     numberLiteral onum "num"
-    |>> fun n -> Decimal.Parse n.String
-    |>> BigRational.FromDecimal
-    |>> NUM
+    |>> fun n ->
+            let s = n.String
 
-let str s = pstring s
+            if n.HasFraction then
+                let [ n1; n2 ] = split [ "." ] s |> toList
+                let d = 10N ** length n2 |> string
+                // n1 + n2 + "/" + d
+                let sb = new StringBuilder()
+
+                sb.Append(n1).Append(n2).Append('/').Append(d)
+                |> string
+            else
+                s
+            |> BigRational.Parse
+            |> NUM
+
+let str = pstring
 
 let pstr =
     let norm = manySatisfy (fun c -> c <> '"' && c <> '\\')
     let escq = stringReturn "\\\"" "\""
 
-    between (str "\"") (str "\"") (stringsSepBy norm escq)
+    between (str "\"") (manyMinMaxSatisfy 0 1 <| (=) '\"') (stringsSepBy norm escq)
     |>> STR
 
 let pdot = str "." |>> CMD
@@ -41,6 +52,7 @@ let pdot = str "." |>> CMD
 let pcmd =
     manySatisfy (function
         | '.'
+        | '"'
         | ' '
         | '\t'
         | '\n' -> false
@@ -48,10 +60,25 @@ let pcmd =
         | _ -> true)
     |>> CMD
 
-let xs = choice [ pdot; pnum; pstr; pcmd ]
+let pline =
+    manyTill
+        (ws
+         >>. choice [ attempt pnum
+                      pdot
+                      pstr
+                      pcmd ])
+        eof
 
-let pline = manyTill (ws >>. xs .>> ws) (newline)
+exception ParseError of string
+
+let parse s =
+    match String.split [ "\n"; "\r\n" ] s
+          |> head
+          |> run pline
+        with
+    | Success (p, _, _) -> p
+    | Failure (e, _, _) -> ParseError e |> raise
 
 #if INTERACTIVE
-run pline "1 2.3 asdf (6 8~ a.+ )\"asdf\"\n9 10"
+parse "1 2.3asdf \"as\\\"df\"(6 8~ .59 a.+ )\"oof\n9 10"
 #endif
