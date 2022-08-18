@@ -8,41 +8,36 @@ module PVec = PersistentVector
 module PMap = PersistentHashMap
 
 module PVec =
-    let lconj xs ys = fold (flip PVec.conj) xs ys
+    let lconj ys xs = fold (flip PVec.conj) xs ys
+
+let (|C|Nil|) = PVec.(|Conj|Nil|)
 
 let stak env st = { env with stack = st }
 
-let arg1 env =
-    if env.stack.Length < 1 then
-        ERR_ST_LEN 1 |> raise
-    else
-        let xs, x = env.stack.Unconj
-        stak env xs, x
+let arg1 env f =
+    match env.stack with
+    | C (xs, x) -> stak env <| f x xs
+    | _ -> ERR_ST_LEN 1 |> raise
 
-let arg2 env =
-    if env.stack.Length < 2 then
-        ERR_ST_LEN 2 |> raise
-    else
-        let xs, x = env.stack.Unconj
-        let xs, y = xs.Unconj
-        stak env xs, y, x
+let arg2 env f =
+    match env.stack with
+    | C (C (xs, y), x) -> stak env <| f y x xs
+    | _ -> ERR_ST_LEN 2 |> raise
 
-let arg3 env =
-    if env.stack.Length < 3 then
-        ERR_ST_LEN 3 |> raise
-    else
-        let xs, x = env.stack.Unconj
-        let xs, y = xs.Unconj
-        let xs, z = xs.Unconj
-        xs, y, x, z
+let arg3 env f =
+    match env.stack with
+    | C (C (C (xs, z), y), x) -> stak env <| f z y x xs
+    | _ -> ERR_ST_LEN 3 |> raise
 
 let push env x = env.stack.Conj x |> stak env
 
-let pop env = arg1 env |> fst
+let pop env = (fun _ xs -> xs) |> arg1 env
+
+let dup env =
+    (fun x -> PVec.lconj [ x; x ]) |> arg1 env
 
 let swap env =
-    let { stack = st }, y, x = arg2 env
-    PVec.lconj st [ x; y ] |> stak env
+    (fun y x -> PVec.lconj [ x; y ]) |> arg2 env
 
 let exec env =
     match env.lines with
@@ -67,4 +62,5 @@ let run file lines =
 
 let SL = new Dictionary<string, ENV -> ENV>()
 SL.Add("pop", pop)
+SL.Add("dup", dup)
 SL.Add("swap", swap)
