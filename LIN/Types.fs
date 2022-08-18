@@ -1,15 +1,14 @@
-namespace LIN
+namespace rec LIN
 
-#if INTERACTIVE
-#r "nuget: FSharpPlus"
-#r "nuget: MathNet.Numerics.FSharp"
-#endif
-
+open FSharpx.Collections
 open FSharpPlus
 open FSharpPlus.Data
 open MathNet.Numerics
 
-type PATH = Option<string>
+type PVec<'T> = 'T PersistentVector
+type PMap<[<EqualityConditionalOn>] 'T, 'S when 'T: equality and 'S: equality> = PersistentHashMap<'T, 'S>
+
+type PATH = string option
 
 type ANY =
     | ARR of ANY array
@@ -21,13 +20,13 @@ type ANY =
     | UN of unit
 
     override s.ToString() =
-        let join s xs = map string xs |> String.intercalate s
+        let join s = map string >> String.intercalate s
 
         match s with
         | ARR xs -> join " " xs
         | OBJ xs ->
             Map.toList xs
-            |> map (fun (x, y) -> map string [ x, y ] |> String.intercalate " ")
+            |> map (sprintf "%A %A" |> (<||))
             |> String.intercalate "\n"
         | NUM x -> BigRational.ToDouble x |> string
         | STR x
@@ -36,7 +35,11 @@ type ANY =
         | _ -> string s
 
 type ENV =
-    { stack: ANY DList
+    { stack: ANY PVec
       file: PATH
-      lns: ANY list
-      lnn: int list }
+      lines: ANY list
+      ln: int
+      scope: PMap<ANY, ANY> }
+
+exception ERR_PARSE of string
+exception ERR_ST_LEN of int

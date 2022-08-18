@@ -10,6 +10,8 @@ NUGET
     FSharp.Core (6.0.5)
     FSharpPlus (1.2.4)
       FSharp.Core (>= 4.6.2)
+    FSharpx.Collections (3.0.1)
+      FSharp.Core (>= 4.3.4)
     MathNet.Numerics (5.0)
     MathNet.Numerics.FSharp (5.0)
       FSharp.Core (>= 6.0.2)

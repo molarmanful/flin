@@ -5,4 +5,5 @@ framework: net6.0
 nuget Argu
 nuget FParsec
 nuget FSharpPlus
+nuget FSharpx.Collections
 nuget MathNet.Numerics.FSharp

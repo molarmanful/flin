@@ -1,11 +1,5 @@
 module LIN.P
 
-#if INTERACTIVE
-#r "nuget: FParsec"
-#r "nuget: MathNet.Numerics.FSharp"
-#endif
-
-open System.Text
 open FSharpPlus
 open FParsec
 open MathNet.Numerics
@@ -26,13 +20,11 @@ let pnum =
             let s = n.String
 
             if n.HasFraction then
-                let [ n1; n2 ] = split [ "." ] s |> toList
+                let dec = split [ "." ] s |> toList
+                let n1 = head dec
+                let n2 = List.last dec
                 let d = 10N ** length n2 |> string
-                // n1 + n2 + "/" + d
-                let sb = new StringBuilder()
-
-                sb.Append(n1).Append(n2).Append('/').Append(d)
-                |> string
+                sprintf "%A%A/%A" n1 n2 d
             else
                 s
             |> BigRational.Parse
@@ -69,16 +61,10 @@ let pline =
                       pcmd ])
         eof
 
-exception ParseError of string
-
 let parse s =
     match String.split [ "\n"; "\r\n" ] s
           |> head
           |> run pline
         with
     | Success (p, _, _) -> p
-    | Failure (e, _, _) -> ParseError e |> raise
-
-#if INTERACTIVE
-parse "1 2.3asdf \"as\\\"df\"(6 8~ .59 a.+ )\"oof\n9 10"
-#endif
+    | Failure (e, _, _) -> ERR_PARSE e |> raise
