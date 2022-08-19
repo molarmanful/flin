@@ -24,7 +24,7 @@ let pnum =
                 let n1 = head dec
                 let n2 = List.last dec
                 let d = 10N ** length n2 |> string
-                sprintf "%A%A/%A" n1 n2 d
+                $"{n1}{n2}/{d}"
             else
                 s
             |> BigRational.Parse

@@ -7,3 +7,4 @@ nuget FParsec
 nuget FSharpPlus
 nuget FSharpx.Collections
 nuget MathNet.Numerics.FSharp
+nuget Spectre.Console

@@ -1,45 +1,50 @@
-namespace rec LIN
+namespace LIN
 
-open FSharpx.Collections
-open FSharpPlus
-open FSharpPlus.Data
-open MathNet.Numerics
+[<AutoOpen>]
+module TYPES =
+    open FSharpx.Collections
+    open FSharpPlus
+    open FSharpPlus.Data
+    open MathNet.Numerics
 
-type PVec<'T> = 'T PersistentVector
-type PMap<[<EqualityConditionalOn>] 'T, 'S when 'T: equality and 'S: equality> = PersistentHashMap<'T, 'S>
+    type PVec<'T> = 'T PersistentVector
+    type PMap<[<EqualityConditionalOn>] 'T, 'S when 'T: equality and 'S: equality> = PersistentHashMap<'T, 'S>
 
-type PATH = string option
+    type PATH = string option * int
 
-type ANY =
-    | ARR of ANY array
-    | OBJ of Map<ANY, ANY>
-    | NUM of BigRational
-    | STR of string
-    | CMD of string
-    | FN of ANY list * (PATH * int)
-    | UN of unit
+    type ANY =
+        | ARR of ANY []
+        | MAP of PMap<ANY, ANY>
+        | NUM of BigRational
+        | STR of string
+        | CMD of string
+        | FN of ANY list * PATH
+        | UN of unit
 
-    override s.ToString() =
-        let join s = map string >> String.intercalate s
+        override t.ToString() =
+            let join s = map string >> String.intercalate s
 
-        match s with
-        | ARR xs -> join " " xs
-        | OBJ xs ->
-            Map.toList xs
-            |> map (sprintf "%A %A" |> (<||))
-            |> String.intercalate "\n"
-        | NUM x -> BigRational.ToDouble x |> string
-        | STR x
-        | CMD x -> x
-        | FN (xs, _) -> List.toArray xs |> join " "
-        | _ -> string s
+            match t with
+            | ARR xs -> join " " xs
+            | MAP xs ->
+                PersistentHashMap.toSeq xs
+                |> map (fun (a, b) -> $"{a} {b}")
+                |> String.intercalate "\n"
+            | NUM x -> BigRational.ToDouble x |> string
+            | STR x
+            | CMD x -> x
+            | FN (xs, _) -> List.toArray xs |> join " "
+            | _ -> string t
 
-type ENV =
-    { stack: ANY PVec
-      file: PATH
-      lines: ANY list
-      ln: int
-      scope: PMap<ANY, ANY> }
+    type ENV =
+        { stack: ANY PVec
+          code: ANY
+          lines: ANY list
+          scope: PMap<ANY, ANY>
+          STEP: bool
+          VERB: bool
+          IMPL: bool }
 
-exception ERR_PARSE of string
-exception ERR_ST_LEN of int
+    exception ERR_PARSE of string
+    exception ERR_ST_LEN of int
+    exception ERR_UNK_FN of string

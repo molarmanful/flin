@@ -3,3 +3,4 @@ FSharpPlus
 FParsec
 MathNet.Numerics.FSharp
 FSharpx.Collections
+Spectre.Console
