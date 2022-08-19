@@ -1,4 +1,4 @@
-namespace LIN
+namespace rec LIN
 
 [<AutoOpen>]
 module TYPES =
@@ -18,7 +18,7 @@ module TYPES =
         | NUM of BigRational
         | STR of string
         | CMD of string
-        | FN of ANY list * PATH
+        | FN of FN
         | UN of unit
 
         override t.ToString() =
@@ -36,9 +36,11 @@ module TYPES =
             | FN (xs, _) -> List.toArray xs |> join " "
             | _ -> string t
 
+    type FN = ANY list * PATH
+
     type ENV =
         { stack: ANY PVec
-          code: ANY
+          code: FN
           lines: ANY list
           scope: PMap<ANY, ANY>
           STEP: bool
@@ -46,5 +48,5 @@ module TYPES =
           IMPL: bool }
 
     exception ERR_PARSE of string
-    exception ERR_ST_LEN of int
-    exception ERR_UNK_FN of string
+    exception ERR_ST_LEN of int * PATH
+    exception ERR_UNK_FN of string * PATH

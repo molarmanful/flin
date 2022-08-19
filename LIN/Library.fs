@@ -41,43 +41,49 @@ module HELP =
     let pTrace env =
         pprint "[dim grey]———>[/]"
 
-        let code =
-            match env.code with
-            | FN (xs, _) -> map toForm xs
+        let xs, (f, l) = env.code
+        let code = map toForm xs
 
         if length code > 5 then
-            ppprint $"""[bold green]{take 3 code |> join " "} ...[/]"""
+            let c = take 5 code |> join " "
+            ppprint $"[bold green]{c} ...[/]"
+        elif length code = 0 then
+            ppprint $"[dim green](EMPTY)[/]"
         else
-            ppprint $"""[bold green]{join " " code}[/]"""
+            let c = join " " code
+            ppprint $"[bold green]{c}[/]"
 
-        pprint "[dim grey]———[/]"
+        let f = defaultArg f "?"
+        ppprint $"[dim grey]———({f}:{l})[/]"
 
         PVec.map (toForm >> printfn "%s") env.stack
         |> ignore
 
     let stk env st = { env with stack = st }
 
+    let mkE env e s = e (s, snd env.code)
+
     let toFN f s =
         match s with
-        | FN (x, _) -> FN(x, f)
-        | STR x -> FN(P.parse x, f)
-        | CMD _ -> FN([ s ], f)
+        | FN (x, _) -> (x, f)
+        | STR x -> (P.parse x, f)
+        | CMD _ -> ([ s ], f)
         | _ -> string s |> STR |> toFN f
 
     let arg1 env f =
         match env.stack with
         | C (xs, x) -> f x xs |> stk env
-        | _ -> ERR_ST_LEN 1 |> raise
+        | _ -> mkE env ERR_ST_LEN 1 |> raise
 
     let arg2 env f =
         match env.stack with
         | C (C (xs, y), x) -> f y x xs |> stk env
-        | _ -> ERR_ST_LEN 2 |> raise
+        | _ -> mkE env ERR_ST_LEN 2 |> raise
 
     let arg3 env f =
         match env.stack with
         | C (C (C (xs, z), y), x) -> f z y x xs |> stk env
-        | _ -> ERR_ST_LEN 3 |> raise
+        | _ -> mkE env ERR_ST_LEN 3 |> raise
 
     let push env x = env.stack.Conj x |> stk env
 
@@ -114,14 +120,14 @@ let SL =
 
 let eval env s =
     match s with
-    | FN _ -> exec { env with code = s }
+    | FN x -> exec { env with code = x }
 
 let exec env =
     match env.code with
-    | FN ([], _) -> env
-    | FN (c :: cs, p) ->
-        execA { env with code = FN(cs, p) } c
-        |> tap (fun x -> if x.VERB || x.STEP then pTrace x)
+    | ([], _) -> env
+    | (c :: cs, p) ->
+        if env.VERB || env.STEP then pTrace env
+        execA { env with code = (cs, p) } c
 
 let execA env c =
     match c with
@@ -131,7 +137,7 @@ let execA env c =
         match x with
         | a when a.StartsWith '\\' && a.Length > 1 -> drop 1 x |> CMD |> push env |> exec
         | a when SL.ContainsKey a -> SL[a](env) |> exec
-        | _ -> ERR_UNK_FN x |> raise
+        | _ -> mkE env ERR_UNK_FN x |> raise
 
 let run (s, v, i) file lines =
     exec
@@ -142,7 +148,9 @@ let run (s, v, i) file lines =
           STEP = s
           VERB = v
           IMPL = i }
-    |> tap (fun x -> if x.IMPL then pTrace x)
+    |> tap (fun env ->
+        if env.STEP || env.VERB || env.IMPL then
+            pTrace env)
 
 let runf o p =
     File.ReadLines p

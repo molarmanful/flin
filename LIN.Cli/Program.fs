@@ -27,7 +27,7 @@ let main argv =
         let res = parser.ParseCommandLine argv
 
         let runner =
-            let o = (res.Contains(Step), res.Contains(Verb), res.Contains(Impl))
+            let o = (res.Contains Step, res.Contains Verb, res.Contains Impl)
 
             match res with
             | p when p.Contains(File) -> p.GetResult File |> ENV.runf o |> Some
@@ -37,17 +37,15 @@ let main argv =
         0
     with
     | e ->
-        let err m e =
-            let e = e.getType() |> string |> Markup.Escape
-            let m = Markup.Escape m
-            AnsiConsole.MarkupLine $"[red]{e}: {m}[/]"
+        let err m =
+            AnsiConsole.MarkupLineInterpolated $"[red]ERR: {m}[/]"
 
-        err
-            e
-            (match e with
-             | ERR_PARSE x -> $"bad syntax \"{x}\""
-             | ERR_ST_LEN x -> $"stack length < {x}"
-             | ERR_UNK_FN x -> $"unknown fn \"{x}\""
-             | _ -> e.Message)
+        err (
+            match e with
+            | ERR_PARSE x -> $"bad syntax \"{x}\""
+            | ERR_ST_LEN (x, (f, l)) -> $"""stack length < {x} @ {defaultArg f "?"}:{l}"""
+            | ERR_UNK_FN (x, (f, l)) -> $"""unknown fn "{x}" @ {defaultArg f "?"}:{l}"""
+            | _ -> string e
+        )
 
         1
