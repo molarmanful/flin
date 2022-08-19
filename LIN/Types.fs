@@ -15,6 +15,7 @@ module TYPES =
     type ANY =
         | ARR of ANY []
         | MAP of PMap<ANY, ANY>
+        | SEQ of ANY seq
         | NUM of BigRational
         | STR of string
         | CMD of string
@@ -25,16 +26,17 @@ module TYPES =
             let join s = map string >> String.intercalate s
 
             match t with
-            | ARR xs -> join " " xs
-            | MAP xs ->
-                PersistentHashMap.toSeq xs
+            | ARR x -> join " " x
+            | MAP x ->
+                PersistentHashMap.toSeq x
                 |> map (fun (a, b) -> $"{a} {b}")
                 |> String.intercalate "\n"
+            | SEQ x -> toArray x |> ARR |> string
             | NUM x -> BigRational.ToDouble x |> string
             | STR x
             | CMD x -> x
-            | FN (xs, _) -> List.toArray xs |> join " "
-            | _ -> string t
+            | FN (x, _) -> toArray x |> ARR |> string
+            | UN _ -> ""
 
     type FN = ANY list * PATH
 

@@ -19,7 +19,7 @@ module HELP =
 
     let toForm a =
         match a with
-        | ARR x -> $"[{map toForm x}]"
+        | ARR x -> map toForm x |> string |> sprintf "[%s]"
         | MAP x ->
             PMap.toSeq x
             |> map (fun (a, b) -> $"{toForm a}=>{toForm b}")
@@ -60,37 +60,28 @@ module HELP =
         |> ignore
 
     let stk env st = { env with stack = st }
-
     let mkE env e s = e (s, snd env.code)
-
-    let toFN f s =
-        match s with
-        | FN (x, _) -> (x, f)
-        | STR x -> (P.parse x, f)
-        | CMD _ -> ([ s ], f)
-        | _ -> string s |> STR |> toFN f
 
     let arg1 env f =
         match env.stack with
-        | C (xs, x) -> f x xs |> stk env
+        | C (xs, x) -> f x <| stk env xs
         | _ -> mkE env ERR_ST_LEN 1 |> raise
 
     let arg2 env f =
         match env.stack with
-        | C (C (xs, y), x) -> f y x xs |> stk env
+        | C (C (xs, x), y) -> f x y <| stk env xs
         | _ -> mkE env ERR_ST_LEN 2 |> raise
 
     let arg3 env f =
         match env.stack with
-        | C (C (C (xs, z), y), x) -> f z y x xs |> stk env
+        | C (C (C (xs, x), y), z) -> f x y z <| stk env xs
         | _ -> mkE env ERR_ST_LEN 3 |> raise
 
-    let push env x = env.stack.Conj x |> stk env
+    let push x env = env.stack.Conj x |> stk env
+    let pushs x env = PVec.lconj x env.stack |> stk env
 
-[<AutoOpen>]
 module LIB =
-    let form env =
-        arg1 env <| (toForm >> STR >> PVec.conj)
+    let form env = arg1 env <| (push << STR << toForm)
 
     let out env =
         arg1 env
@@ -106,17 +97,21 @@ module LIB =
 
     let pop env = arg1 env <| fun _ xs -> xs
 
-    let dup env =
-        arg1 env <| fun x -> PVec.lconj [ x; x ]
+    let dup env = arg1 env <| fun x -> pushs [ x; x ]
 
-    let swap env =
-        arg2 env <| fun y x -> PVec.lconj [ x; y ]
+    let swap env = arg2 env <| fun x y -> pushs [ y; x ]
 
-let SL =
-    dict [ ("form", form)
-           ("pop", pop)
-           ("dup", dup)
-           ("swap", swap) ]
+    let Lplus env = arg2 env <| fun x -> push << ANY.plus x
+
+    let SL =
+        dict [ ("form", form)
+               ("out", out)
+               ("outn", outn)
+               ("dup", dup)
+               ("pop", pop)
+               ("swap", swap)
+               ("+", Lplus)
+               (".", id) ]
 
 let eval env s =
     match s with
@@ -132,17 +127,17 @@ let exec env =
 let execA env c =
     match c with
     | NUM _
-    | STR _ -> push env c |> exec
+    | STR _ -> push c env |> exec
     | CMD x ->
         match x with
-        | a when a.StartsWith '\\' && a.Length > 1 -> drop 1 x |> CMD |> push env |> exec
-        | a when SL.ContainsKey a -> SL[a](env) |> exec
+        | a when a.StartsWith '\\' && a.Length > 1 -> drop 1 x |> CMD |> flip push env |> exec
+        | a when LIB.SL.ContainsKey a -> LIB.SL[a](env) |> exec
         | _ -> mkE env ERR_UNK_FN x |> raise
 
 let run (s, v, i) file lines =
     exec
         { stack = PVec.empty
-          code = head lines |> toFN (file, 0)
+          code = head lines |> ANY.toCode (file, 0)
           lines = lines
           scope = PMap.empty
           STEP = s
