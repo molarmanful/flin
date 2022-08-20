@@ -16,12 +16,12 @@ let typ t =
     | FN _ -> Some "fn"
     | _ -> None
 
-let toCode f s =
+let toCode p s =
     match s with
-    | FN (x, _) -> (x, f)
-    | STR x -> (P.parse x, f)
-    | CMD _ -> ([ s ], f)
-    | _ -> string s |> STR |> toCode f
+    | FN (x, _) -> (x, p)
+    | STR x -> (P.parse x, p)
+    | CMD _ -> ([ s ], p)
+    | _ -> string s |> STR |> toCode p
 
 let map f t =
     match t with

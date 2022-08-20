@@ -5,8 +5,6 @@ NUGET
     Argu (6.1.1)
       FSharp.Core (>= 4.3.2)
       System.Configuration.ConfigurationManager (>= 4.4)
-    FParsec (1.1.1)
-      FSharp.Core (>= 4.3.4)
     FSharp.Core (6.0.5)
     FSharpPlus (1.2.4)
       FSharp.Core (>= 4.6.2)
