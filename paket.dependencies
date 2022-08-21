@@ -3,6 +3,7 @@ source https://api.nuget.org/v3/index.json
 storage: none
 framework: net6.0
 nuget Argu
+nuget Ficus
 nuget FSharpPlus
 nuget FSharpx.Collections
 nuget MathNet.Numerics.FSharp

@@ -25,9 +25,7 @@ let clean S =
                      | PT.CMD -> CMD S.x
                      | PT.NUM -> NUM <| BigRational.Parse S.x
                      | PT.DEC ->
-                         let dec = split [ "." ] S.x |> toList
-                         let n1 = head dec
-                         let n2 = head <| drop 1 dec
+                         let [ n1; n2 ] = split [ "." ] S.x |> toList
                          let d = 10N ** length n2 |> string
                          NUM <| BigRational.Parse $"{n1}{n2}/{d}" ] }
 
@@ -41,7 +39,7 @@ let pstr S c =
         addc
             (match c with
              | '"' -> "\""
-             | _ -> $"{c}")
+             | _ -> $"\\{c}")
             S
         |> addt PT.STR
     | PT.STR ->
@@ -70,14 +68,14 @@ open System
 
 let choice S c =
     match c with
-    | ' '
-    | '\t'
-    | '\r'
-    | '\n' -> clean S
     | _ when S.t = PT.STR || S.t = PT.ESC -> pstr S c
     | '"' -> clean S |> addt PT.STR
     | '.' -> pdot S
     | _ when Char.IsDigit c -> pnum S c
+    | ' '
+    | '\t'
+    | '\r'
+    | '\n' -> clean S
     | _ -> pcmd S c
 
 let pline =

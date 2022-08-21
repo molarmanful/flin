@@ -3,15 +3,21 @@ module rec LIN.TYPES
 
 open FSharpx.Collections
 open FSharpPlus
+open Ficus.RRBVector
 open MathNet.Numerics
 
-type PVec<'T> = 'T PersistentVector
+module RVec = RRBVector
+module PVec = PersistentVector
+module PMap = PersistentHashMap
+
+type RVec<'T> = RRBVector<'T>
+type PVec<'T> = PersistentVector<'T>
 type PMap<[<EqualityConditionalOn>] 'T, 'S when 'T: equality and 'S: equality> = PersistentHashMap<'T, 'S>
 
-type PATH = string option * int
+type PATH = string * int
 
 type ANY =
-    | ARR of ANY []
+    | ARR of RVec<ANY>
     | MAP of PMap<ANY, ANY>
     | SEQ of ANY seq
     | NUM of BigRational
@@ -21,22 +27,19 @@ type ANY =
     | UN of unit
 
     override t.ToString() =
-        let join s = map string >> String.intercalate s
-
         match t with
-        | ARR x -> join " " x
+        | ARR x -> RVec.map string x |> String.intercalate " "
         | MAP x ->
-            PersistentHashMap.toSeq x
-            |> map (fun (a, b) -> $"{a} {b}")
+            Seq.map (fun (a, b) -> $"{a} {b}") x
             |> String.intercalate "\n"
-        | SEQ x -> toArray x |> ARR |> string
+        | SEQ x -> map string x |> String.intercalate " "
         | NUM x -> BigRational.ToDouble x |> string
         | STR x
         | CMD x -> x
-        | FN (x, _) -> toArray x |> ARR |> string
+        | FN (_, x) -> map string x |> String.intercalate " "
         | UN _ -> ""
 
-type FN = ANY list * PATH
+type FN = PATH * ANY list
 
 type PT =
     | UN = 0
@@ -46,21 +49,18 @@ type PT =
     | ESC = 4
     | DEC = 5
 
-type PST =
-    { xs: ANY list
-      x: string
-      t: PT }
+type PST = { xs: ANY list; x: string; t: PT }
 
 
 type ENV =
-    { stack: ANY PVec
+    { stack: PVec<ANY>
       code: FN
-      lines: ANY list
+      lines: PMap<PATH, ANY>
       scope: PMap<ANY, ANY>
       STEP: bool
       VERB: bool
       IMPL: bool }
 
 exception ERR_PARSE of string
-exception ERR_ST_LEN of int * PATH
-exception ERR_UNK_FN of string * PATH
+exception ERR_ST_LEN of PATH * int
+exception ERR_UNK_FN of PATH * string

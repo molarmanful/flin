@@ -25,14 +25,12 @@ let main argv =
 
     try
         let res = parser.ParseCommandLine argv
+        let o = (res.Contains Step, res.Contains Verb, res.Contains Impl)
 
-        let runner =
-            let o = (res.Contains Step, res.Contains Verb, res.Contains Impl)
-
-            match res with
-            | p when p.Contains(File) -> p.GetResult File |> ENV.runf o |> Some
-            | p when p.Contains(Eval) -> p.GetResult Eval |> ENV.runs o |> Some
-            | _ -> None
+        if res.Contains(File) then
+            res.GetResult File |> ENV.runf o |> ignore
+        elif res.Contains(Eval) then
+            res.GetResult Eval |> ENV.runs o |> ignore
 
         0
     with
@@ -43,8 +41,8 @@ let main argv =
         err (
             match e with
             | ERR_PARSE x -> $"bad syntax \"{x}\""
-            | ERR_ST_LEN (x, (f, l)) -> $"""stack length < {x} @ {defaultArg f "?"}:{l}"""
-            | ERR_UNK_FN (x, (f, l)) -> $"""unknown fn "{x}" @ {defaultArg f "?"}:{l}"""
+            | ERR_ST_LEN ((f, l), x) -> $"""stack length < {x} @ {f}:{l}"""
+            | ERR_UNK_FN ((f, l), x) -> $"""unknown fn "{x}" @ {f}:{l}"""
             | _ -> string e
         )
 

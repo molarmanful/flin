@@ -4,8 +4,11 @@ open System.IO
 open Spectre.Console
 open FSharpx.Collections
 open FSharpPlus
+open FSharpPlus.Lens
+open Ficus.RRBVector
 open MathNet.Numerics
 
+module RVec = RRBVector
 module PVec = PersistentVector
 module PMap = PersistentHashMap
 
@@ -16,15 +19,14 @@ let (|C|Nil|) = PVec.(|Conj|Nil|)
 
 [<AutoOpen>]
 module HELP =
-    let join s = map string >> String.intercalate s
+    let lines = String.split [ "\n"; "\r\n" ]
 
     let toForm a =
         match a with
-        | ARR x -> map toForm x |> string |> sprintf "[%s]"
+        | ARR x -> RVec.map toForm x |> string |> sprintf "[%s]"
         | MAP x ->
-            PMap.toSeq x
-            |> map (fun (a, b) -> $"{toForm a}=>{toForm b}")
-            |> join " "
+            Seq.map (fun (a, b) -> $"{toForm a}=>{toForm b}") x
+            |> String.intercalate " "
             |> sprintf "{%s}"
         | NUM _ -> string a
         | STR x ->
@@ -32,11 +34,10 @@ module HELP =
             |> fold (flip <| (<||) replace) x
             |> sprintf "\"%s\""
         | CMD x -> x
-        | FN (x, (f, l)) ->
-            toSeq x
-            |> Seq.map toForm
-            |> join " "
-            |> fun a -> $"""( {a} )@{l}"""
+        | FN (_, x) ->
+            List.map toForm x
+            |> String.intercalate " "
+            |> fun a -> $"( {a} )"
         | UN _ -> "$U"
 
     let pprint = AnsiConsole.MarkupLine
@@ -45,14 +46,14 @@ module HELP =
     let pTrace (c, env, d) =
         pprint "[dim grey]———>[/]"
 
-        let xs, (f, l) = env.code
+        let (l, f), xs = env.code
         let c = toForm c
-        let code = map toForm xs
+        let fcs = map toForm xs
 
-        if length code > 7 then
-            let cs = take 7 code |> join " "
+        if length fcs > 7 then
+            let cs = take 7 fcs |> String.intercalate " "
             ppprint $"[bold yellow]{c}[/] [grey]{cs} ...[/]"
-        elif length code = 0 then
+        elif length fcs = 0 then
             ppprint (
                 if d then
                     $"[dim green](EMPTY)[/]"
@@ -60,29 +61,28 @@ module HELP =
                     $"[bold yellow]{c}[/]"
             )
         else
-            let cs = join " " code
+            let cs = fcs |> String.intercalate " "
             ppprint $"[bold yellow]{c}[/] [grey]{cs}[/]"
 
-        let f = defaultArg f "?"
         ppprint $"[dim grey]———({f}:{l})[/]"
 
         PVec.map (toForm >> printfn "%s") env.stack
         |> ignore
 
     let stk env st = { env with stack = st }
-    let mkE env e s = e (s, snd env.code)
+    let mkE env e s = e (fst env.code, s)
 
     let cod env xs =
-        let (_, l) = env.code
-        { env with code = (xs, l) }
+        let l, _ = env.code
+        { env with code = (l, xs) }
 
     let code env xs =
-        let (cs, l) = env.code
-        { env with code = (xs ++ cs, l) }
+        let l, cs = env.code
+        { env with code = (l, xs ++ cs) }
 
-    let codl env (xs, l) =
-        let (cs, _) = env.code
-        { env with code = (xs ++ cs, l) }
+    let codl env (p, xs) =
+        let _, cs = env.code
+        { env with code = (p, xs ++ cs) }
 
     let arg1 env f =
         match env.stack with
@@ -100,12 +100,42 @@ module HELP =
         | _ -> mkE env ERR_ST_LEN 3 |> raise
 
     let push x env = env.stack.Conj x |> stk env
+    let push' = flip push
     let pushs x env = PVec.lconj x env.stack |> stk env
+    let pushs' = flip pushs
 
     let eval env s =
         match s with
-        | FN x -> codl env x
-        | _ -> ANY.toCode (snd env.code) s |> FN |> eval env
+        | FN x -> codl env x |> exec
+        | _ -> ANY.toFN env s |> eval env
+
+    let evalr env s = (eval env s).stack
+
+    let pline env i =
+        let (f, _), _ = env.code
+
+        { env with
+            lines =
+                if PMap.containsKey (f, i) env.lines then
+                    let s = env.lines[f, i]
+
+                    PMap.add
+                        (f, i)
+                        (match s with
+                         | STR _ -> ANY.iFN env i s
+                         | _ -> s)
+                        env.lines
+                else
+                    env.lines }
+
+    let eline env i =
+        let (f, _), _ = env.code
+
+        if PMap.containsKey (f, i) env.lines then
+            let env = pline env i
+            eval env env.lines[f, i]
+        else
+            env
 
 module LIB =
     let form env = arg1 env <| (push << STR << toForm)
@@ -126,16 +156,21 @@ module LIB =
 
     let dup env = arg1 env <| fun x -> pushs [ x; x ]
 
+    let dups env =
+        RVec.ofSeq env.stack |> ARR |> push' env
+
     let swap env = arg2 env <| fun x y -> pushs [ y; x ]
 
-    let Lplus env = arg2 env <| fun x -> push << ANY.plus x
+    let neg env = arg1 env <| fun x -> ANY.neg x |> push
+
+    let Lplus env = arg2 env <| fun x -> ANY.plus x >> push
 
     let startFN env =
         let rec fn env i res =
             match i, env.code with
-            | 0, (_, l)
-            | _, ([], l) -> FN(res, l) |> flip push env
-            | _, (c :: cs, _) ->
+            | 0, (l, _)
+            | _, (l, []) -> FN(l, res) |> push' env
+            | _, (_, c :: cs) ->
                 match c with
                 | CMD x when x.Contains "(" -> res ++ [ c ] |> fn (cod env cs) (i + 1)
                 | CMD x when x.Contains ")" ->
@@ -149,14 +184,25 @@ module LIB =
 
     let es env = arg1 env <| flip eval
 
-    let quar env = failwith "TODO"
+    let quar env =
+        arg1 env
+        <| fun x env ->
+            ANY.toFN env x |> eval env
+            </ arg1 /> fun y _ -> push y env
 
     let typ env =
         arg1 env
         <| fun x -> ANY.typ x |> option STR (NUM 0N) |> push
 
+    let dot env =
+        if snd env.code |> length = 0 then
+            let (_, l), _ = env.code
+            eline env (l + 1)
+        else
+            failwith "TODO"
+
     let SL =
-        dict [ ("typ", typ)
+        dict [ ("type", typ)
                ("form", form)
                ("out", out)
                ("outn", outn)
@@ -165,19 +211,20 @@ module LIB =
                ("swap", swap)
                ("(", startFN)
                (")", id)
-               ("$", es)
+               ("#", es)
                ("Q", quar)
+               ("_", neg)
                ("+", Lplus)
-               (".", id) ]
+               (".", dot) ]
 
 let exec env =
     match env.code with
-    | ([], _) ->
+    | (_, []) ->
         if env.STEP || env.VERB || env.IMPL then
             pTrace (UN(), env, true)
 
         env
-    | (c :: cs, p) -> execA { env with code = (cs, p) } c
+    | (p, c :: cs) -> execA { env with code = (p, cs) } c
 
 let execA env c =
     if env.STEP || env.VERB then
@@ -191,27 +238,33 @@ let execA env c =
         | a when a.StartsWith '\\' && a.Length > 1 ->
             drop 1 x
             |> CMD
-            |> ANY.toCode (snd env.code)
-            |> FN
-            |> flip push env
+            |> ANY.toFN env
+            |> push' env
             |> exec
+        | a when a.StartsWith '#' && a.Length > 1 -> env
         | a when LIB.SL.ContainsKey a -> LIB.SL[a](env) |> exec
         | _ -> mkE env ERR_UNK_FN x |> raise
 
 let run (s, v, i) file lines =
-    exec
+    let env =
         { stack = PVec.empty
-          code = head lines |> ANY.toCode (file, 0)
+          code = ((file, 0), [])
           lines = lines
           scope = PMap.empty
           STEP = s
           VERB = v
           IMPL = i }
 
-let runf o p =
-    File.ReadLines p
-    |> map STR
-    |> toList
-    |> run o (Some p)
+    eline env 0
 
-let runs o s = run o None [ STR s ]
+let runf o f =
+    File.ReadLines f
+    |> mapi (fun l x -> ((f, l), STR x))
+    |> PMap.ofSeq
+    |> run o f
+
+let runs o s =
+    lines s
+    |> mapi (fun l x -> (("", l), STR x))
+    |> PMap.ofSeq
+    |> run o ""

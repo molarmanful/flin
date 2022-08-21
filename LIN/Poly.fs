@@ -3,7 +3,11 @@ module rec LIN.ANY
 open FSharpx.Collections
 open FSharpPlus
 open FSharpPlus.Data
-open MathNet.Numerics
+open Ficus.RRBVector
+
+module PVec = PersistentVector
+module PMap = PersistentHashMap
+module RVec = RRBVector
 
 let typ t =
     match t with
@@ -18,31 +22,35 @@ let typ t =
 
 let toCode p s =
     match s with
-    | FN (x, _) -> (x, p)
-    | STR x -> (P.parse x, p)
-    | CMD _ -> ([ s ], p)
+    | FN (_, x) -> (p, x)
+    | STR x -> (p, P.parse x)
+    | CMD _ -> (p, [ s ])
     | _ -> string s |> STR |> toCode p
+
+let toFN env = fst env.code |> toCode >> FN
+let iFN env i = toCode (fst env.code |> fst, i) >> FN
 
 let map f t =
     match t with
-    | ARR x -> Array.map f x |> ARR
-    | MAP x -> PersistentHashMap.map f x |> MAP
+    | ARR x -> RVec.map f x |> ARR
+    | MAP x -> PMap.map f x |> MAP
     | SEQ x -> Seq.map f x |> SEQ
     | _ -> f t
 
-let imap f t =
+let neg t =
     match t with
-    | ARR _
-    | MAP _
-    | SEQ _ -> map (imap f) t
-    | _ -> f t
+    | NUM x -> NUM -x
 
 let plus t s =
     match t, s with
-    | NUM x, NUM y -> x + y |> NUM
+    | FN (p, x), FN (_, y) -> FN(p, x ++ y)
+    | FN (p, x), y -> FN(p, x ++ [ y ])
+    | x, FN (p, y) -> FN(p, [ x ] ++ y)
     | STR x, STR y -> x + y |> STR
-    | NUM x, STR y -> string x + y |> STR
-    | STR x, NUM y -> x + string y |> STR
-    | FN (x, p), FN (y, _) -> (x ++ y, p) |> FN
-    | FN (x, p), y -> (x ++ [ y ], p) |> FN
-    | x, FN (y, p) -> ([ x ] ++ y, p) |> FN
+    | x, STR y -> string x + y |> STR
+    | STR x, y -> x + string y |> STR
+    | NUM x, NUM y -> x + y |> NUM
+
+let plus' t s =
+    match t, s with
+    | ARR x, ARR y -> RVec.append x y |> ARR
