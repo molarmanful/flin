@@ -32,7 +32,7 @@ type ANY =
         | MAP x ->
             Seq.map (fun (a, b) -> $"{a} {b}") x
             |> String.intercalate "\n"
-        | SEQ x -> map string x |> String.intercalate " "
+        | SEQ x -> map string x |> String.intercalate ""
         | NUM x -> BigRational.ToDouble x |> string
         | STR x
         | CMD x -> x
@@ -50,7 +50,6 @@ type PT =
     | DEC = 5
 
 type PST = { xs: ANY list; x: string; t: PT }
-
 
 type ENV =
     { stack: PVec<ANY>

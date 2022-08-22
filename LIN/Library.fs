@@ -19,36 +19,22 @@ let (|C|Nil|) = PVec.(|Conj|Nil|)
 
 [<AutoOpen>]
 module HELP =
-    let lines = String.split [ "\n"; "\r\n" ]
+    let TODO x = failwith "TODO"
 
-    let toForm a =
-        match a with
-        | ARR x -> RVec.map toForm x |> string |> sprintf "[%s]"
-        | MAP x ->
-            Seq.map (fun (a, b) -> $"{toForm a}=>{toForm b}") x
-            |> String.intercalate " "
-            |> sprintf "{%s}"
-        | NUM _ -> string a
-        | STR x ->
-            [ "\\", "\\\\"; "\"", "\\\"" ]
-            |> fold (flip <| (<||) replace) x
-            |> sprintf "\"%s\""
-        | CMD x -> x
-        | FN (_, x) ->
-            List.map toForm x
-            |> String.intercalate " "
-            |> fun a -> $"( {a} )"
-        | UN _ -> "$U"
+    let lines = String.split [ "\n"; "\r\n" ]
 
     let pprint = AnsiConsole.MarkupLine
     let ppprint = AnsiConsole.MarkupLineInterpolated
 
-    let pTrace (c, env, d) =
-        pprint "[dim grey]———>[/]"
-
+    let pTrace c env d =
         let (l, f), xs = env.code
-        let c = toForm c
-        let fcs = map toForm xs
+        let c = ANY.toForm c
+        let fcs = map ANY.toForm xs
+
+        PVec.map (ANY.toForm >> printfn "%s") env.stack
+        |> ignore
+
+        pprint "[dim grey]———>[/]"
 
         if length fcs > 7 then
             let cs = take 7 fcs |> String.intercalate " "
@@ -56,7 +42,7 @@ module HELP =
         elif length fcs = 0 then
             ppprint (
                 if d then
-                    $"[dim green](EMPTY)[/]"
+                    $"[dim green](END)[/]"
                 else
                     $"[bold yellow]{c}[/]"
             )
@@ -66,21 +52,20 @@ module HELP =
 
         ppprint $"[dim grey]———({f}:{l})[/]"
 
-        PVec.map (toForm >> printfn "%s") env.stack
-        |> ignore
-
     let stk env st = { env with stack = st }
     let mkE env e s = e (fst env.code, s)
 
-    let cod env xs =
+    let code env xs =
         let l, _ = env.code
         { env with code = (l, xs) }
 
-    let code env xs =
+    let coda env xs =
         let l, cs = env.code
         { env with code = (l, xs ++ cs) }
 
-    let codl env (p, xs) =
+    let lcode env fn = { env with code = fn }
+
+    let lcoda env (p, xs) =
         let _, cs = env.code
         { env with code = (p, xs ++ cs) }
 
@@ -106,7 +91,15 @@ module HELP =
 
     let eval env s =
         match s with
-        | FN x -> codl env x |> exec
+        | FN x ->
+            let (_, c) = env.code
+
+            match c with
+            | [] -> lcoda env x |> exec
+            | _ ->
+                lcode env x
+                |> exec
+                |> fun env1 -> stk env env1.stack
         | _ -> ANY.toFN env s |> eval env
 
     let evalr env s = (eval env s).stack
@@ -138,7 +131,7 @@ module HELP =
             env
 
 module LIB =
-    let form env = arg1 env <| (push << STR << toForm)
+    let form env = arg1 env <| (push << STR << ANY.toForm)
 
     let out env =
         arg1 env
@@ -152,18 +145,34 @@ module LIB =
             printfn $"{string x}"
             xs
 
-    let pop env = arg1 env <| fun _ xs -> xs
+    let show = form >> outn
 
     let dup env = arg1 env <| fun x -> pushs [ x; x ]
 
     let dups env =
         RVec.ofSeq env.stack |> ARR |> push' env
 
+    let over env =
+        arg2 env <| fun x y -> pushs [ x; y; x ]
+
+    let pick env =
+        arg1 env
+        <| fun x env -> push env.stack[ANY.toInt x] env
+
+    let pop env = arg1 env <| konst id
+
+    let clr env = stk env PVec.empty
+
+    let nip env = arg2 env <| konst push
+
     let swap env = arg2 env <| fun x y -> pushs [ y; x ]
 
     let neg env = arg1 env <| fun x -> ANY.neg x |> push
 
     let Lplus env = arg2 env <| fun x -> ANY.plus x >> push
+
+    let plusp env =
+        arg2 env <| fun x -> ANY.plus' x >> push
 
     let startFN env =
         let rec fn env i res =
@@ -172,13 +181,13 @@ module LIB =
             | _, (l, []) -> FN(l, res) |> push' env
             | _, (_, c :: cs) ->
                 match c with
-                | CMD x when x.Contains "(" -> res ++ [ c ] |> fn (cod env cs) (i + 1)
+                | CMD x when x.Contains "(" -> res ++ [ c ] |> fn (code env cs) (i + 1)
                 | CMD x when x.Contains ")" ->
                     let i = i - 1
 
                     (if i > 0 then res ++ [ c ] else res)
-                    |> fn (cod env cs) i
-                | _ -> res ++ [ c ] |> fn (cod env cs) i
+                    |> fn (code env cs) i
+                | _ -> res ++ [ c ] |> fn (code env cs) i
 
         fn env 1 []
 
@@ -187,48 +196,91 @@ module LIB =
     let quar env =
         arg1 env
         <| fun x env ->
-            ANY.toFN env x |> eval env
-            </ arg1 /> fun y _ -> push y env
+            ANY.toFN env x
+            |> evalr env
+            |> PVec.tryLast
+            |> Option.defaultValue (UN())
+            |> push' env
 
     let typ env =
         arg1 env
         <| fun x -> ANY.typ x |> option STR (NUM 0N) |> push
 
+    let Lstr env =
+        arg1 env <| fun x -> ANY.toSTR x |> push
+
+    let Lnum env =
+        arg1 env <| fun x -> ANY.toNUM x |> push
+
+    let Larr env =
+        arg1 env <| fun x -> ANY.toNUM x |> push
+
+    let eln env =
+        arg1 env
+        <| fun x env ->
+            let (_, l), _ = env.code
+            eline env (l + ANY.toInt x)
+
+    let eprev = NUM -1N |> push >> eln
+    let ehere = NUM 0N |> push >> eln
+    let enext = NUM 1N |> push >> eln
+
     let dot env =
         if snd env.code |> length = 0 then
-            let (_, l), _ = env.code
-            eline env (l + 1)
+            enext env
         else
             failwith "TODO"
 
     let SL =
-        dict [ ("type", typ)
-               ("form", form)
-               ("out", out)
-               ("outn", outn)
-               ("dup", dup)
-               ("pop", pop)
-               ("swap", swap)
-               ("(", startFN)
-               (")", id)
-               ("#", es)
-               ("Q", quar)
-               ("_", neg)
-               ("+", Lplus)
-               (".", dot) ]
+        dict [ "type", typ
+               ">S", Lstr
+               ">N", Lnum
+               ">F", TODO
+               ">A", Larr
+               ">M", TODO
+               ">Q", TODO
+               "form", form
+
+               "out", out
+               "outn", outn
+               "show", show
+
+               "dup", dup
+               "dups", dups
+               "over", over
+               "pick", pick
+               "pop", pop
+               "clr", clr
+               "nip", nip
+               "nix", TODO
+               "swap", swap
+               "rot", TODO
+               "rot_", TODO
+               "roll", TODO
+               "roll_", TODO
+
+               "_", neg
+               "+", Lplus
+               "++", plusp
+
+               "(", startFN
+               ")", id // TODO?
+               "#", es
+               "Q", quar
+               "@", ehere
+               ";", enext
+               ";;", eprev
+               "e@", TODO
+               ".", dot ]
 
 let exec env =
     match env.code with
-    | (_, []) ->
-        if env.STEP || env.VERB || env.IMPL then
-            pTrace (UN(), env, true)
-
-        env
+    | (_, []) -> env
     | (p, c :: cs) -> execA { env with code = (p, cs) } c
 
 let execA env c =
     if env.STEP || env.VERB then
-        pTrace (c, env, false)
+        pTrace c env false
 
     match c with
     | NUM _
@@ -256,6 +308,9 @@ let run (s, v, i) file lines =
           IMPL = i }
 
     eline env 0
+    |> tap (fun env ->
+        if env.STEP || env.VERB || env.IMPL then
+            pTrace (UN()) env true)
 
 let runf o f =
     File.ReadLines f
