@@ -54,22 +54,28 @@ let toCode p t =
 let toFN env = fst env.code |> toCode >> FN
 let iFN env i = toCode (fst env.code |> fst, i) >> FN
 
+let toSEQ t =
+    match t with
+    | SEQ _ -> t
+    | ARR x -> RVec.toSeq x |> SEQ
+    | MAP x ->
+        Seq.map (fun (a, b) -> RVec.ofSeq [ a; b ] |> ARR) x
+        |> SEQ
+    | FN (_, x) -> SEQ x
+    | NUM _ -> toARR t |> toSEQ
+    | STR x -> Seq.map (string >> STR) x |> SEQ
+    | UN _ -> SEQ Seq.empty
+
 let toARR t =
     match t with
     | ARR _ -> t
-    | MAP x ->
-        RVec.ofSeq x
-        |> RVec.map (fun (a, b) -> RVec.ofSeq [ a; b ] |> ARR)
-        |> ARR
     | SEQ x -> RVec.ofSeq x |> ARR
-    | STR x -> RVec.ofSeq x |> RVec.map (string >> STR) |> ARR
     | NUM x ->
         RVec.ofSeq [ x.Numerator
                      x.Denominator ]
         |> RVec.map (BigRational.FromBigInt >> NUM)
         |> ARR
-    | FN (_, x) -> RVec.ofSeq x |> ARR
-    | UN _ -> ARR RVec.empty
+    | _ -> toSEQ t |> toARR
 
 let toNUM t =
     match t with
@@ -117,19 +123,29 @@ let neg t =
 
 let plus t s =
     match t, s with
+    | NUM x, NUM y -> x + y |> NUM
+    | _, STR _
+    | STR _, _
+    | _, FN _
+    | FN _, _ -> toNUM t </ plus /> toNUM s
+
+let plus' t s =
+    match t, s with
     | FN (p, x), FN (_, y) -> FN(p, x ++ y)
     | FN (p, x), y -> FN(p, x ++ [ y ])
     | x, FN (p, y) -> FN(p, [ x ] ++ y)
     | STR x, STR y -> x + y |> STR
-    | x, STR y -> string x + y |> STR
-    | STR x, y -> x + string y |> STR
-    | NUM x, NUM y -> x + y |> NUM
+    | STR _, _
+    | _, STR _
+    | NUM _, NUM _ -> toSTR t </ plus' /> toSTR s
 
-let plus' t s =
+let plus'' t s =
     match t, s with
+    | SEQ x, SEQ y -> x ++ y |> SEQ
     | ARR x, ARR y -> RVec.append x y |> ARR
+    | ARR _, x -> t </ plus'' /> (RVec.ofSeq [ x ] |> ARR)
+    | x, ARR _ -> RVec.ofSeq [ x ] |> ARR </ plus'' /> s
     | MAP x, MAP y ->
         PMap.toSeq y
         |> Seq.fold (fun c (a, b) -> PMap.add a b c) x
         |> MAP
-    | SEQ x, SEQ y -> x ++ y |> SEQ

@@ -74,15 +74,24 @@ module HELP =
         | C (xs, x) -> f x <| stk env xs
         | _ -> mkE env ERR_ST_LEN 1 |> raise
 
+    let mod1 f env = arg1 env <| (f >> push)
+    let mod1s f env = arg1 env <| (f >> pushs)
+
     let arg2 env f =
         match env.stack with
         | C (C (xs, x), y) -> f x y <| stk env xs
         | _ -> mkE env ERR_ST_LEN 2 |> raise
 
+    let mod2 f env = arg2 env <| fun x -> f x >> push
+    let mod2s f env = arg2 env <| fun x -> f x >> pushs
+
     let arg3 env f =
         match env.stack with
         | C (C (C (xs, x), y), z) -> f x y z <| stk env xs
         | _ -> mkE env ERR_ST_LEN 3 |> raise
+
+    let mod3 f env = arg3 env <| fun x y -> f x y >> push
+    let mod3s f env = arg3 env <| fun x y -> f x y >> pushs
 
     let push x env = env.stack.Conj x |> stk env
     let push' = flip push
@@ -131,50 +140,41 @@ module HELP =
             env
 
 module LIB =
-    let form env = arg1 env <| (push << STR << ANY.toForm)
+    let form = mod1 (ANY.toForm >> STR)
 
-    let out env =
-        arg1 env
-        <| fun x xs ->
+    let out =
+        mod1s
+        <| fun x ->
             printf $"{string x}"
-            xs
+            []
 
-    let outn env =
-        arg1 env
-        <| fun x xs ->
+    let outn =
+        mod1s
+        <| fun x ->
             printfn $"{string x}"
-            xs
+            []
 
     let show = form >> outn
 
-    let dup env = arg1 env <| fun x -> pushs [ x; x ]
+    let dup = mod1s <| fun x -> [ x; x ]
 
     let dups env =
         RVec.ofSeq env.stack |> ARR |> push' env
 
-    let over env =
-        arg2 env <| fun x y -> pushs [ x; y; x ]
+    let over = mod2s <| fun x y -> [ x; y; x ]
 
-    let pop env = arg1 env <| konst id
+    let pop = mod1s <| konst []
+    let clr = flip stk PVec.empty
+    let nip = mod2 <| fun x _ -> x
 
-    let clr env = stk env PVec.empty
+    let swap = mod2s <| fun x y -> [ y; x ]
+    let rot = mod3s <| fun x y z -> [ y; z; x ]
+    let rot_ = mod3s <| fun x y z -> [ z; x; y ]
 
-    let nip env = arg2 env <| konst push
-
-    let swap env = arg2 env <| fun x y -> pushs [ y; x ]
-
-    let rot env =
-        arg3 env <| fun x y z -> pushs [ y; z; x ]
-
-    let rot_ env =
-        arg3 env <| fun x y z -> pushs [ z; x; y ]
-
-    let neg env = arg1 env <| fun x -> ANY.neg x |> push
-
-    let Lplus env = arg2 env <| fun x -> ANY.plus x >> push
-
-    let plusp env =
-        arg2 env <| fun x -> ANY.plus' x >> push
+    let neg = mod1 ANY.neg
+    let Lplus = mod2 ANY.plus
+    let Lplus' = mod2 ANY.plus'
+    let Lplus'' = mod2 ANY.plus''
 
     let startFN env =
         let rec fn env i res =
@@ -204,18 +204,12 @@ module LIB =
             |> Option.defaultValue (UN())
             |> push' env
 
-    let typ env =
-        arg1 env
-        <| fun x -> ANY.typ x |> option STR (NUM 0N) |> push
+    let typ = mod1 (ANY.typ >> option STR (NUM 0N))
 
-    let Lstr env =
-        arg1 env <| fun x -> ANY.toSTR x |> push
-
-    let Lnum env =
-        arg1 env <| fun x -> ANY.toNUM x |> push
-
-    let Larr env =
-        arg1 env <| fun x -> ANY.toNUM x |> push
+    let Lstr = mod1 ANY.toSTR
+    let Lnum = mod1 ANY.toNUM
+    let Lseq = mod1 ANY.toSEQ
+    let Larr = mod1 ANY.toARR
 
     let eln env =
         arg1 env
@@ -240,7 +234,7 @@ module LIB =
                ">F", TODO
                ">A", Larr
                ">M", TODO
-               ">Q", TODO
+               ">Q", Lseq
                "form", form
 
                ">O", out
@@ -263,14 +257,14 @@ module LIB =
 
                "_", neg
                "+", Lplus
+               "++", Lplus'
+               "+'", Lplus''
                "-", TODO
                "*", TODO
-               "**", TODO
+               "^", TODO
                "/", TODO
                "%", TODO
                "/%", TODO
-
-               "++", plusp
 
                "(", startFN
                ")", id // TODO?
@@ -280,6 +274,9 @@ module LIB =
                ";", enext
                ";;", eprev
                "e@", eln
+
+               "[", TODO
+               "]", TODO
 
                ".", dot ]
 

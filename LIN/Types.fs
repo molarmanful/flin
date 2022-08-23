@@ -63,3 +63,4 @@ type ENV =
 exception ERR_PARSE of string
 exception ERR_ST_LEN of PATH * int
 exception ERR_UNK_FN of PATH * string
+exception ERR_CAST of PATH * string
