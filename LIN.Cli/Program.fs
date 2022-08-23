@@ -43,7 +43,7 @@ let main argv =
             | ERR_PARSE x -> $"bad syntax \"{x}\""
             | ERR_ST_LEN ((f, l), x) -> $"""stack length < {x} @ {f}:{l}"""
             | ERR_UNK_FN ((f, l), x) -> $"""unknown fn "{x}" @ {f}:{l}"""
-            | _ -> string e
+            | _ -> e.Message
         )
 
         1

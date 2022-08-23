@@ -31,6 +31,7 @@ let toForm a =
         Seq.map (fun (a, b) -> $"{toForm a}=>{toForm b}") x
         |> String.intercalate " "
         |> sprintf "{%s}"
+    | SEQ _ -> "[...]`"
     | NUM _ -> string a
     | STR x ->
         [ "\\", "\\\\"; "\"", "\\\"" ]
@@ -83,6 +84,21 @@ let toNUM t =
 let unNUM n =
     let (NUM n) = toNUM n
     n
+
+let toBOOL n =
+    let toN b = NUM(if b then 1N else 0N)
+
+    toN (
+        match n with
+        | NUM x -> x <> 0N
+        | STR x -> x <> ""
+        | ARR x -> x <> RVec.empty
+        | MAP x -> x <> PMap.empty
+        | SEQ x -> x <> Seq.empty
+        | CMD _
+        | FN _ -> true
+        | UN _ -> false
+    )
 
 let toInt = unNUM >> BigRational.ToInt32
 

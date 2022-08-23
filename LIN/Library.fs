@@ -95,7 +95,7 @@ module HELP =
             let (_, c) = env.code
 
             match c with
-            | [] -> lcoda env x |> exec
+            | [] -> lcoda env x
             | _ ->
                 lcode env x
                 |> exec
@@ -155,10 +155,6 @@ module LIB =
     let over env =
         arg2 env <| fun x y -> pushs [ x; y; x ]
 
-    let pick env =
-        arg1 env
-        <| fun x env -> push env.stack[ANY.toInt x] env
-
     let pop env = arg1 env <| konst id
 
     let clr env = stk env PVec.empty
@@ -166,6 +162,12 @@ module LIB =
     let nip env = arg2 env <| konst push
 
     let swap env = arg2 env <| fun x y -> pushs [ y; x ]
+
+    let rot env =
+        arg3 env <| fun x y z -> pushs [ y; z; x ]
+
+    let rot_ env =
+        arg3 env <| fun x y z -> pushs [ z; x; y ]
 
     let neg env = arg1 env <| fun x -> ANY.neg x |> push
 
@@ -241,26 +243,33 @@ module LIB =
                ">Q", TODO
                "form", form
 
-               "out", out
-               "outn", outn
-               "show", show
+               ">O", out
+               "n>O", outn
+               "f>O", show
 
                "dup", dup
                "dups", dups
                "over", over
-               "pick", pick
+               "pick", TODO
                "pop", pop
                "clr", clr
                "nip", nip
                "nix", TODO
                "swap", swap
-               "rot", TODO
-               "rot_", TODO
+               "rot", rot
+               "rot_", rot_
                "roll", TODO
                "roll_", TODO
 
                "_", neg
                "+", Lplus
+               "-", TODO
+               "*", TODO
+               "**", TODO
+               "/", TODO
+               "%", TODO
+               "/%", TODO
+
                "++", plusp
 
                "(", startFN
@@ -270,13 +279,14 @@ module LIB =
                "@", ehere
                ";", enext
                ";;", eprev
-               "e@", TODO
+               "e@", eln
+
                ".", dot ]
 
 let exec env =
     match env.code with
     | (_, []) -> env
-    | (p, c :: cs) -> execA { env with code = (p, cs) } c
+    | (p, c :: cs) -> execA { env with code = (p, cs) } c |> exec
 
 let execA env c =
     if env.STEP || env.VERB then
@@ -284,17 +294,12 @@ let execA env c =
 
     match c with
     | NUM _
-    | STR _ -> push c env |> exec
+    | STR _ -> push c env
     | CMD x ->
         match x with
-        | a when a.StartsWith '\\' && a.Length > 1 ->
-            drop 1 x
-            |> CMD
-            |> ANY.toFN env
-            |> push' env
-            |> exec
+        | a when a.StartsWith '\\' && a.Length > 1 -> drop 1 x |> CMD |> ANY.toFN env |> push' env
         | a when a.StartsWith '#' && a.Length > 1 -> env
-        | a when LIB.SL.ContainsKey a -> LIB.SL[a](env) |> exec
+        | a when LIB.SL.ContainsKey a -> LIB.SL[a](env)
         | _ -> mkE env ERR_UNK_FN x |> raise
 
 let run (s, v, i) file lines =
@@ -308,6 +313,7 @@ let run (s, v, i) file lines =
           IMPL = i }
 
     eline env 0
+    |> exec
     |> tap (fun env ->
         if env.STEP || env.VERB || env.IMPL then
             pTrace (UN()) env true)
