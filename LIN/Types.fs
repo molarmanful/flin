@@ -56,6 +56,7 @@ type ENV =
       code: FN
       lines: PMap<PATH, ANY>
       scope: PMap<ANY, ANY>
+      arr: PVec<ANY> list
       STEP: bool
       VERB: bool
       IMPL: bool }

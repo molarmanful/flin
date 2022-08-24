@@ -168,6 +168,7 @@ module LIB =
     let nip = mod2 <| fun x _ -> x
 
     let swap = mod2s <| fun x y -> [ y; x ]
+    let tuck = mod2s <| fun x y -> [ y; x; y ]
     let rot = mod3s <| fun x y z -> [ y; z; x ]
     let rot_ = mod3s <| fun x y z -> [ z; x; y ]
 
@@ -192,6 +193,17 @@ module LIB =
                 | _ -> res ++ [ c ] |> fn (code env cs) i
 
         fn env 1 []
+
+    let startARR env =
+        { stk env PVec.empty with arr = env.stack :: env.arr }
+
+    let endARR env =
+        match env.arr with
+        | [] -> env
+        | s :: ss ->
+            SEQ env.stack
+            |> ANY.toARR
+            |> push' { stk env s with arr = ss }
 
     let es env = arg1 env <| flip eval
 
@@ -250,6 +262,7 @@ module LIB =
                "nip", nip
                "nix", TODO
                "swap", swap
+               "tuck", tuck
                "rot", rot
                "rot_", rot_
                "roll", TODO
@@ -265,9 +278,6 @@ module LIB =
                "/", TODO
                "%", TODO
                "/%", TODO
-
-               "(", startFN
-               ")", id // TODO?
                "#", es
                "Q", quar
                "@", ehere
@@ -275,8 +285,10 @@ module LIB =
                ";;", eprev
                "e@", eln
 
-               "[", TODO
-               "]", TODO
+               "(", startFN
+               ")", id // TODO:?
+               "[", startARR
+               "]", endARR
 
                ".", dot ]
 
@@ -286,6 +298,8 @@ let exec env =
     | (p, c :: cs) -> execA { env with code = (p, cs) } c |> exec
 
 let execA env c =
+    if env.STEP then TODO 0
+
     if env.STEP || env.VERB then
         pTrace c env false
 
@@ -305,6 +319,7 @@ let run (s, v, i) file lines =
           code = ((file, 0), [])
           lines = lines
           scope = PMap.empty
+          arr = []
           STEP = s
           VERB = v
           IMPL = i }

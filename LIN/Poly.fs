@@ -51,6 +51,11 @@ let toCode p t =
     | CMD _ -> (p, [ t ])
     | _ -> string t |> STR |> toCode p
 
+let toStack t =
+    match t with
+    | SEQ x -> PVec.ofSeq x
+    | _ -> toSEQ t |> toStack
+
 let toFN env = fst env.code |> toCode >> FN
 let iFN env i = toCode (fst env.code |> fst, i) >> FN
 
@@ -61,20 +66,16 @@ let toSEQ t =
     | MAP x ->
         Seq.map (fun (a, b) -> RVec.ofSeq [ a; b ] |> ARR) x
         |> SEQ
-    | FN (_, x) -> SEQ x
-    | NUM _ -> toARR t |> toSEQ
+    | NUM _
+    | CMD _ -> SEQ [ t ]
     | STR x -> Seq.map (string >> STR) x |> SEQ
+    | FN (_, x) -> SEQ x
     | UN _ -> SEQ Seq.empty
 
 let toARR t =
     match t with
     | ARR _ -> t
     | SEQ x -> RVec.ofSeq x |> ARR
-    | NUM x ->
-        RVec.ofSeq [ x.Numerator
-                     x.Denominator ]
-        |> RVec.map (BigRational.FromBigInt >> NUM)
-        |> ARR
     | _ -> toSEQ t |> toARR
 
 let toNUM t =
