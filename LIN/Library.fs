@@ -166,19 +166,40 @@ module LIB =
 
     let dup = mod1s <| fun x -> [ x; x ]
 
-    let dups env =
-        RVec.ofSeq env.stack |> ARR |> push' env
+    let dups env = ANY.fromStack env.stack |> push' env
 
     let over = mod2s <| fun x y -> [ x; y; x ]
+
+    // TODO: make sure index is length - i - 1
+    // use ANY fns
+    let pick env =
+        arg1 env
+        <| fun i ->
+            ANY.modStack' (fun x -> x </ ANY.plus'' /> ANY.get i x)
+            >> stk env
 
     let pop = mod1s <| konst []
     let clr = flip stk PVec.empty
     let nip = mod2 <| fun x _ -> x
 
+    // TODO: make sure index is length - i - 1
+    // use ANY fns + custom minus''
+    let nix env =
+        arg1 env
+        <| fun i ->
+            ANY.modStack' (fun (ARR x) -> RVec.remove (ANY.toInt i) x |> ARR)
+            >> stk env
+
     let swap = mod2s <| fun x y -> [ y; x ]
     let tuck = mod2s <| fun x y -> [ y; x; y ]
     let rot = mod3s <| fun x y z -> [ y; z; x ]
     let rot_ = mod3s <| fun x y z -> [ z; x; y ]
+    let roll = TODO
+    let roll_ = TODO
+
+    let dip env =
+        arg2 env
+        <| fun x y env1 -> evalr env1 y |> stk env1 |> push x
 
     let neg = mod1 ANY.neg
     let Lplus = mod2 ANY.plus
@@ -218,7 +239,17 @@ module LIB =
     let emptyFN env = UN() |> ANY.toFN env |> push' env
     let emptyARR = UN() |> ANY.toARR |> push
 
-    let pair = mod2 <| fun x y -> RVec.ofSeq [ x; y ] |> ARR
+    let wrap = mod1 <| fun x -> RVec.ofSeq [ x ] |> ARR
+    let wrap' = mod2 <| fun x y -> RVec.ofSeq [ x; y ] |> ARR
+
+    let wrap'' env =
+        stk env PVec.empty
+        |> push (ANY.fromStack env.stack)
+
+    let unwrap = mod1s (ANY.toStack >> toList)
+
+    let unwrap' env =
+        arg1 env <| fun x _ -> ANY.toStack x |> stk env
 
     let enum' = mod1 ANY.toInds
 
@@ -296,22 +327,39 @@ module LIB =
                "tuck", tuck
                "rot", rot
                "rot_", rot_
-               "roll", TODO
-               "roll_", TODO
+               "roll", roll
+               "roll_", roll_
+               "dip", dip
 
                "_", neg
                "+", Lplus
                "++", Lplus'
-               "+,", Lplus''
+               "+`", Lplus''
                "-", TODO
+               "--", TODO
+               "-`", TODO
                "*", TODO
-               "^", TODO
+               "**", TODO
+               "*`", TODO
                "/", TODO
+               "//", TODO
+               "/`", TODO
                "%", TODO
+               "%%", TODO
+               "%`", TODO
                "/%", TODO
+               "^", TODO
+               "^^", TODO
+               "^`", TODO
 
+               "~", TODO
                "!", Lnot
-               "!,", Lnot'
+               "!`", Lnot'
+               "&", TODO
+               "&&", TODO
+               "|", TODO
+               "||", TODO
+               "$", TODO
 
                "(", startFN
                ")", id // TODO:?
@@ -324,7 +372,11 @@ module LIB =
 
                "[", startARR
                "]", endARR
-               ",", pair
+               ",", wrap
+               ",,", wrap'
+               ",`", wrap''
+               ",_", unwrap
+               ",,_", unwrap'
                "enum", enum'
 
                "{", startARR

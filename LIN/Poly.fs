@@ -59,6 +59,10 @@ let toStack t =
     | SEQ x -> PVec.ofSeq x
     | _ -> toSEQ t |> toStack
 
+let fromStack s = RVec.ofSeq s |> ARR
+let modStack f = fromStack >> f >> toStack
+let modStack' f env = fromStack env.stack |> f |> toStack
+
 let toFN env = fst env.code |> toCode >> FN
 let iFN env i = toCode (fst env.code |> fst, i) >> FN
 
@@ -236,9 +240,12 @@ let vec2 f t s =
     | _ -> table f t s
 
 let neg t =
-    match t with
-    | NUM x -> NUM -x
-    | _ -> toNUM t |> neg
+    vec1
+        (fun t ->
+            match t with
+            | NUM x -> NUM -x
+            | _ -> toNUM t |> neg)
+        t
 
 let plus t s =
     vec2
