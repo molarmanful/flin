@@ -53,7 +53,6 @@ module HELP =
         ppprint $"[dim grey]———({f}:{l})[/]"
 
     let stk env st = { env with stack = st }
-    let mkE env e s = e (fst env.code, s)
 
     let code env xs =
         let l, _ = env.code
@@ -72,7 +71,7 @@ module HELP =
     let arg1 env f =
         match env.stack with
         | C (xs, x) -> f x <| stk env xs
-        | _ -> mkE env ERR_ST_LEN 1 |> raise
+        | _ -> ANY.mkE env ERR_ST_LEN 1
 
     let mod1 f env = arg1 env <| (f >> push)
     let mod1s f env = arg1 env <| (f >> pushs)
@@ -80,7 +79,7 @@ module HELP =
     let arg2 env f =
         match env.stack with
         | C (C (xs, x), y) -> f x y <| stk env xs
-        | _ -> mkE env ERR_ST_LEN 2 |> raise
+        | _ -> ANY.mkE env ERR_ST_LEN 2
 
     let mod2 f env = arg2 env <| fun x -> f x >> push
     let mod2s f env = arg2 env <| fun x -> f x >> pushs
@@ -88,7 +87,7 @@ module HELP =
     let arg3 env f =
         match env.stack with
         | C (C (C (xs, x), y), z) -> f x y z <| stk env xs
-        | _ -> mkE env ERR_ST_LEN 3 |> raise
+        | _ -> ANY.mkE env ERR_ST_LEN 3
 
     let mod3 f env = arg3 env <| fun x y -> f x y >> push
     let mod3s f env = arg3 env <| fun x y -> f x y >> pushs
@@ -109,9 +108,18 @@ module HELP =
                 lcode env x
                 |> exec
                 |> fun env1 -> stk env env1.stack
+        | NUM _ -> push s env
+        | ANY.Itr _ ->
+            ANY.map
+                (evale env
+                 >> exec
+                 >> fun env1 -> RVec.ofSeq env1.stack |> ARR)
+                s
+            |> push' env
         | _ -> ANY.toFN env s |> eval env
 
-    let evalr env s = (eval env s).stack
+    let evale env = eval env >> exec
+    let evalr env s = (evale env s).stack
 
     let pline env i =
         let (f, _), _ = env.code
@@ -205,13 +213,21 @@ module LIB =
             |> ANY.toARR
             |> push' { stk env s with arr = ss }
 
+    let endMAP env = endARR env |> LMap
+
+    let emptyFN env = UN() |> ANY.toFN env |> push' env
+    let emptyARR = UN() |> ANY.toARR |> push
+
+    let pair = mod2 <| fun x y -> RVec.ofSeq [ x; y ] |> ARR
+
+    let enum' = mod1 ANY.toInds
+
     let es env = arg1 env <| flip eval
 
     let quar env =
         arg1 env
         <| fun x env ->
-            ANY.toFN env x
-            |> evalr env
+            evalr env x
             |> PVec.tryLast
             |> Option.defaultValue (UN())
             |> push' env
@@ -219,9 +235,22 @@ module LIB =
     let typ = mod1 (ANY.typ >> option STR (NUM 0N))
 
     let Lstr = mod1 ANY.toSTR
+    let Lfn env = ANY.toFN env </ mod1 /> env
     let Lnum = mod1 ANY.toNUM
     let Lseq = mod1 ANY.toSEQ
     let Larr = mod1 ANY.toARR
+    let LMap = mod1 ANY.toMAP
+    let Lbool = mod1 ANY.toBOOL
+
+    let Lun =
+        mod1
+        <| (NUM
+            << function
+                | UN _ -> 0N
+                | _ -> 1N)
+
+    let Lnot' = mod1 ANY.not'
+    let Lnot = mod1 (ANY.vec1 ANY.not')
 
     let eln env =
         arg1 env
@@ -243,10 +272,12 @@ module LIB =
         dict [ "type", typ
                ">S", Lstr
                ">N", Lnum
-               ">F", TODO
+               ">F", Lfn
                ">A", Larr
-               ">M", TODO
+               ">M", LMap
                ">Q", Lseq
+               ">!", Lbool
+               ">?", Lun
                "form", form
 
                ">O", out
@@ -271,13 +302,19 @@ module LIB =
                "_", neg
                "+", Lplus
                "++", Lplus'
-               "+'", Lplus''
+               "+,", Lplus''
                "-", TODO
                "*", TODO
                "^", TODO
                "/", TODO
                "%", TODO
                "/%", TODO
+
+               "!", Lnot
+               "!,", Lnot'
+
+               "(", startFN
+               ")", id // TODO:?
                "#", es
                "Q", quar
                "@", ehere
@@ -285,19 +322,26 @@ module LIB =
                ";;", eprev
                "e@", eln
 
-               "(", startFN
-               ")", id // TODO:?
                "[", startARR
                "]", endARR
+               ",", pair
+               "enum", enum'
+
+               "{", startARR
+               "}", endMAP
+
+               "$U", UN() |> push
+               "()", emptyFN
+               "[]", emptyARR
 
                ".", dot ]
 
 let exec env =
     match env.code with
     | (_, []) -> env
-    | (p, c :: cs) -> execA { env with code = (p, cs) } c |> exec
+    | (p, c :: cs) -> lcode env (p, cs) |> execA c |> exec
 
-let execA env c =
+let execA c env =
     if env.STEP then TODO 0
 
     if env.STEP || env.VERB then
@@ -307,11 +351,16 @@ let execA env c =
     | NUM _
     | STR _ -> push c env
     | CMD x ->
-        match x with
-        | a when a.StartsWith '\\' && a.Length > 1 -> drop 1 x |> CMD |> ANY.toFN env |> push' env
-        | a when a.StartsWith '#' && a.Length > 1 -> env
-        | a when LIB.SL.ContainsKey a -> LIB.SL[a](env)
-        | _ -> mkE env ERR_UNK_FN x |> raise
+        if x.StartsWith '\\' && x.Length > 1 then
+            drop 1 x |> CMD |> ANY.toFN env |> push' env
+        elif x.StartsWith '#' && x.Length > 1 then
+            env
+        elif env.scope.ContainsKey <| STR x then
+            eval env env.scope[c]
+        elif LIB.SL.ContainsKey x then
+            LIB.SL[x](env)
+        else
+            ANY.mkE env ERR_UNK_FN x
 
 let run (s, v, i) file lines =
     let env =
