@@ -4,9 +4,7 @@ open System.IO
 open Spectre.Console
 open FSharpx.Collections
 open FSharpPlus
-open FSharpPlus.Lens
 open Ficus.RRBVector
-open MathNet.Numerics
 
 module RVec = RRBVector
 module PVec = PersistentVector
@@ -175,7 +173,7 @@ module LIB =
     let pick env =
         arg1 env
         <| fun i ->
-            ANY.modStack' (fun x -> x </ ANY.plus'' /> ANY.get i x)
+            ANY.modStack' (fun x -> x </ ANY.Lplus'' /> ANY.get i x)
             >> stk env
 
     let pop = mod1s <| konst []
@@ -187,7 +185,7 @@ module LIB =
     let nix env =
         arg1 env
         <| fun i ->
-            ANY.modStack' (fun (ARR x) -> RVec.remove (ANY.toInt i) x |> ARR)
+            ANY.modStack'' (RVec.remove (ANY.toI i) >> ARR)
             >> stk env
 
     let swap = mod2s <| fun x y -> [ y; x ]
@@ -202,9 +200,15 @@ module LIB =
         <| fun x y env1 -> evalr env1 y |> stk env1 |> push x
 
     let neg = mod1 ANY.neg
-    let Lplus = mod2 ANY.plus
-    let Lplus' = mod2 ANY.plus'
-    let Lplus'' = mod2 ANY.plus''
+    let Lplus = mod2 ANY.Lplus
+    let Lplus' = mod2 ANY.Lplus'
+    let Lplus'' = mod2 ANY.Lplus''
+    let Lsub = mod2 ANY.Lsub
+    let Lmul = mod2 ANY.Lmul
+    let Ldiv = mod2 ANY.Ldiv
+    let Lmod = mod2 ANY.Lmod
+    let Ldivmod = mod2s <| fun x y -> [ ANY.Ldiv x y; ANY.Lmod x y ]
+    let Lpow = mod2 ANY.Lpow
 
     let startFN env =
         let rec fn env i res =
@@ -263,7 +267,7 @@ module LIB =
             |> Option.defaultValue (UN())
             |> push' env
 
-    let typ = mod1 (ANY.typ >> option STR (NUM 0N))
+    let typ = mod1 (ANY.typ >> option STR (NUM 0))
 
     let Lstr = mod1 ANY.toSTR
     let Lfn env = ANY.toFN env </ mod1 /> env
@@ -277,8 +281,8 @@ module LIB =
         mod1
         <| (NUM
             << function
-                | UN _ -> 0N
-                | _ -> 1N)
+                | UN _ -> 0
+                | _ -> 1)
 
     let Lnot' = mod1 ANY.not'
     let Lnot = mod1 (ANY.vec1 ANY.not')
@@ -287,11 +291,11 @@ module LIB =
         arg1 env
         <| fun x env ->
             let (_, l), _ = env.code
-            eline env (l + ANY.toInt x)
+            eline env (l + ANY.toI x)
 
-    let eprev = NUM -1N |> push >> eln
-    let ehere = NUM 0N |> push >> eln
-    let enext = NUM 1N |> push >> eln
+    let eprev = NUM -1 |> push >> eln
+    let ehere = NUM 0 |> push >> eln
+    let enext = NUM 1 |> push >> eln
 
     let dot env =
         if snd env.code |> length = 0 then
@@ -332,23 +336,25 @@ module LIB =
                "dip", dip
 
                "_", neg
+               "__", TODO
+               "_`", TODO
                "+", Lplus
                "++", Lplus'
                "+`", Lplus''
-               "-", TODO
+               "-", Lsub
                "--", TODO
                "-`", TODO
-               "*", TODO
+               "*", Lmul
                "**", TODO
                "*`", TODO
-               "/", TODO
+               "/", Ldiv
                "//", TODO
                "/`", TODO
-               "%", TODO
+               "%", Lmod
                "%%", TODO
                "%`", TODO
                "/%", TODO
-               "^", TODO
+               "^", Lpow
                "^^", TODO
                "^`", TODO
 

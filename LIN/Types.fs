@@ -4,7 +4,7 @@ module rec LIN.TYPES
 open FSharpx.Collections
 open FSharpPlus
 open Ficus.RRBVector
-open MathNet.Numerics
+open System.Numerics
 
 module RVec = RRBVector
 module PVec = PersistentVector
@@ -13,6 +13,7 @@ module PMap = PersistentHashMap
 type RVec<'T> = RRBVector<'T>
 type PVec<'T> = PersistentVector<'T>
 type PMap<[<EqualityConditionalOn>] 'T, 'S when 'T: equality and 'S: equality> = PersistentHashMap<'T, 'S>
+type BR = BigRational
 
 type PATH = string * int
 
@@ -20,7 +21,7 @@ type ANY =
     | ARR of RVec<ANY>
     | MAP of PMap<ANY, ANY>
     | SEQ of ANY seq
-    | NUM of BigRational
+    | NUM of BR
     | STR of string
     | CMD of string
     | FN of FN
@@ -33,7 +34,7 @@ type ANY =
             Seq.map (fun (a, b) -> $"{a} {b}") x
             |> String.intercalate "\n"
         | SEQ x -> map string x |> String.intercalate ""
-        | NUM x -> BigRational.ToDouble x |> string
+        | NUM x -> x.ToString "R"
         | STR x
         | CMD x -> x
         | FN (_, x) -> map string x |> String.intercalate " "

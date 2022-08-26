@@ -4,3 +4,5 @@ MathNet.Numerics.FSharp
 FSharpx.Collections
 Spectre.Console
 Ficus
+BigRational
+Argu

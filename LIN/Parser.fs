@@ -1,7 +1,6 @@
 module LIN.P
 
 open FSharpPlus
-open MathNet.Numerics
 
 let isPar = String.forall <| flip String.contains "([{}])"
 
@@ -23,11 +22,8 @@ let clean S =
                      | _ when S.x = "." -> CMD "."
                      | PT.STR -> STR S.x
                      | PT.CMD -> CMD S.x
-                     | PT.NUM -> NUM <| BigRational.Parse S.x
-                     | PT.DEC ->
-                         let [ n1; n2 ] = split [ "." ] S.x |> toList
-                         let d = 10N ** length n2 |> string
-                         NUM <| BigRational.Parse $"{n1}{n2}/{d}" ] }
+                     | PT.DEC
+                     | PT.NUM -> NUM <| BR.Parse S.x ] }
 
 let addc c S : PST = { S with x = $"{S.x}{c}" }
 let addt t S : PST = { S with t = t }

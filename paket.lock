@@ -1,10 +1,11 @@
 STORAGE: NONE
-RESTRICTION: == net6.0
+RESTRICTION: == net7.0
 NUGET
   remote: https://api.nuget.org/v3/index.json
     Argu (6.1.1)
       FSharp.Core (>= 4.3.2)
       System.Configuration.ConfigurationManager (>= 4.4)
+    BigRational (1.0.0.6)
     Ficus (0.0.1)
       FSharp.Core (>= 4.3.4)
     FSharp.Core (6.0.5)
