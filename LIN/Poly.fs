@@ -45,7 +45,7 @@ let toForm a =
         List.map toForm x
         |> String.intercalate " "
         |> fun a -> $"( {a} )"
-    | UN _ -> "$U"
+    | UN _ -> "UN"
 
 let toCode p t =
     match t with
@@ -116,6 +116,10 @@ let toNUM t =
 
 let unNUM n =
     let (NUM n) = toNUM n
+    n
+
+let unSTR n =
+    let (STR n) = toSTR n
     n
 
 let toBOOL n =
@@ -308,3 +312,11 @@ let Ldiv t = num2 (/) t >> fromNaN
 let Lmod = num2 mod'
 
 let Lpow = num2 (fun x y -> BR.Pow(x, y, BR.MaxDigits))
+
+let bNOT =
+    num1 (fun x -> -1L - x)
+
+let trunc = num1 BR.Truncate
+let floor = num1 BR.Floor
+let round = num1 BR.Round
+let ceil = num1 BR.Ceiling

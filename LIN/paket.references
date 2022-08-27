@@ -1,8 +1,7 @@
-FSharp.Core
 FSharpPlus
 MathNet.Numerics.FSharp
 FSharpx.Collections
 Spectre.Console
 Ficus
-BigRational
 Argu
+BigRational

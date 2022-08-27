@@ -168,24 +168,20 @@ module LIB =
 
     let over = mod2s <| fun x y -> [ x; y; x ]
 
-    // TODO: make sure index is length - i - 1
-    // use ANY fns
     let pick env =
         arg1 env
         <| fun i ->
-            ANY.modStack' (fun x -> x </ ANY.Lplus'' /> ANY.get i x)
+            ANY.modStack' (fun x -> ANY.get (ANY.bNOT i) x |> ANY.Lplus'' x)
             >> stk env
 
     let pop = mod1s <| konst []
     let clr = flip stk PVec.empty
     let nip = mod2 <| fun x _ -> x
 
-    // TODO: make sure index is length - i - 1
-    // use ANY fns + custom minus''
     let nix env =
         arg1 env
         <| fun i ->
-            ANY.modStack'' (RVec.remove (ANY.toI i) >> ARR)
+            ANY.modStack'' (ANY.bNOT i |> ANY.toI |> RVec.remove >> ARR)
             >> stk env
 
     let swap = mod2s <| fun x y -> [ y; x ]
@@ -209,6 +205,11 @@ module LIB =
     let Lmod = mod2 ANY.Lmod
     let Ldivmod = mod2s <| fun x y -> [ ANY.Ldiv x y; ANY.Lmod x y ]
     let Lpow = mod2 ANY.Lpow
+
+    let trunc = mod1 ANY.trunc
+    let floor = mod1 ANY.floor
+    let round = mod1 ANY.round
+    let ceil = mod1 ANY.ceil
 
     let startFN env =
         let rec fn env i res =
@@ -270,7 +271,7 @@ module LIB =
     let typ = mod1 (ANY.typ >> option STR (NUM 0))
 
     let Lstr = mod1 ANY.toSTR
-    let Lfn env = ANY.toFN env </ mod1 /> env
+    let Lfn env = mod1 (ANY.toFN env) env
     let Lnum = mod1 ANY.toNUM
     let Lseq = mod1 ANY.toSEQ
     let Larr = mod1 ANY.toARR
@@ -284,8 +285,14 @@ module LIB =
                 | UN _ -> 0
                 | _ -> 1)
 
+    let nform =
+        mod2
+        <| fun x y -> (ANY.unNUM x).ToString(ANY.unSTR y) |> STR
+
+    let nstd = push (STR "L15") >> nform
+
     let Lnot' = mod1 ANY.not'
-    let Lnot = mod1 (ANY.vec1 ANY.not')
+    let Lnot = mod1 <| ANY.vec1 ANY.not'
 
     let eln env =
         arg1 env
@@ -297,6 +304,10 @@ module LIB =
     let ehere = NUM 0 |> push >> eln
     let enext = NUM 1 |> push >> eln
 
+    let eStArr env =
+        arg1 env
+        <| fun x -> wrap'' >> push x >> quar >> unwrap'
+
     let dot env =
         if snd env.code |> length = 0 then
             enext env
@@ -307,6 +318,8 @@ module LIB =
         dict [ "type", typ
                ">S", Lstr
                ">N", Lnum
+               ">Nf", nform
+               ">Ns", nstd
                ">F", Lfn
                ">A", Larr
                ">M", LMap
@@ -322,11 +335,11 @@ module LIB =
                "dup", dup
                "dups", dups
                "over", over
-               "pick", TODO
+               "pick", pick
                "pop", pop
                "clr", clr
                "nip", nip
-               "nix", TODO
+               "nix", nix
                "swap", swap
                "tuck", tuck
                "rot", rot
@@ -353,19 +366,22 @@ module LIB =
                "%", Lmod
                "%%", TODO
                "%`", TODO
-               "/%", TODO
+               "/%", Ldivmod
                "^", Lpow
                "^^", TODO
                "^`", TODO
 
-               "~", TODO
+               "I", trunc
+               "|_", floor
+               "|-", round
+               "|^", ceil
+
                "!", Lnot
                "!`", Lnot'
-               "&", TODO
+               "&", Lnot
                "&&", TODO
-               "|", TODO
+               "|", Lnot
                "||", TODO
-               "$", TODO
 
                "(", startFN
                ")", id // TODO:?
@@ -375,6 +391,7 @@ module LIB =
                ";", enext
                ";;", eprev
                "e@", eln
+               "$", eStArr
 
                "[", startARR
                "]", endARR
@@ -388,7 +405,8 @@ module LIB =
                "{", startARR
                "}", endMAP
 
-               "$U", UN() |> push
+               "UN", UN() |> push
+               "OO", NUM infinity |> push
                "()", emptyFN
                "[]", emptyARR
 
