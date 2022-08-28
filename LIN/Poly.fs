@@ -41,10 +41,14 @@ let toForm a =
         |> fold (flip <| (<||) replace) x
         |> sprintf "\"%s\""
     | CMD x -> x
-    | FN (_, x) ->
+    | FN ((_, l), x) ->
+        let n =
+            string l
+            |> String.map (fun d -> "⁰¹²³⁴⁵⁶⁷⁸⁹"[int d - 48])
+
         List.map toForm x
         |> String.intercalate " "
-        |> fun a -> $"( {a} )"
+        |> fun a -> $"({a}){n}"
     | UN _ -> "UN"
 
 let toCode p t =
@@ -274,21 +278,17 @@ let num2 f =
         | NUM x, NUM y -> f x y |> NUM
         | _ -> num2 f (toNUM t) (toNUM s))
 
+let str2 f =
+    vec2 (fun t s ->
+        match t, s with
+        | STR x, STR y -> f x y |> STR
+        | _ -> str2 f (toSTR t) (toSTR s))
+
+
 let neg = num1 <| (~-)
 
 let Lplus = num2 (+)
-
-let Lplus' t s =
-    vec2
-        (fun t s ->
-            match t, s with
-            | FN (p, x), FN (_, y) -> FN(p, x ++ y)
-            | FN (p, x), y -> FN(p, x ++ [ y ])
-            | x, FN (p, y) -> FN(p, [ x ] ++ y)
-            | STR x, STR y -> x ++ y |> STR
-            | _ -> toSTR t </ Lplus' /> toSTR s)
-        t
-        s
+let Lplus' = str2 (++)
 
 let Lplus'' t s =
     match t, s with
@@ -313,8 +313,7 @@ let Lmod = num2 mod'
 
 let Lpow = num2 (fun x y -> BR.Pow(x, y, BR.MaxDigits))
 
-let bNOT =
-    num1 (fun x -> -1L - x)
+let bNOT = num1 (fun x -> -1L - x)
 
 let trunc = num1 BR.Truncate
 let floor = num1 BR.Floor

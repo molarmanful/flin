@@ -1,5 +1,6 @@
 ﻿module rec LIN.ENV
 
+open System
 open System.IO
 open Spectre.Console
 open FSharpx.Collections
@@ -119,6 +120,17 @@ module HELP =
     let evale env = eval env >> exec
     let evalr env s = (evale env s).stack
 
+    let evalq env =
+        evalr env
+        >> PVec.tryLast
+        >> Option.defaultValue (UN())
+
+    let evalS env f = stk env >> flip evalq f
+    let evals env f = PVec.ofSeq >> evalS env f
+    let eval1 env f x = evals env f [ x ]
+    let eval2 env f x y = evals env f [ x; y ]
+    let eval3 env f x y z = evals env f [ x; y; z ]
+
     let pline env i =
         let (f, _), _ = env.code
 
@@ -145,6 +157,12 @@ module HELP =
         else
             env
 
+    let wrapFN y (FN (p, cs)) =
+        let w = y = CMD ""
+        let a = if w then [] else [ CMD "(" ]
+        let b = if w then [] else [ CMD ")"; y ]
+        FN(p, a ++ cs ++ b)
+
 module LIB =
     let form = mod1 (ANY.toForm >> STR)
 
@@ -159,6 +177,14 @@ module LIB =
         <| fun x ->
             printfn $"{string x}"
             []
+
+    let inp env =
+        let s = ReadLine.Read("")
+        push (STR s) env
+
+    let inh env =
+        let s = ReadLine.ReadPassword("")
+        push (STR s) env
 
     let show = form >> outn
 
@@ -214,17 +240,27 @@ module LIB =
     let startFN env =
         let rec fn env i res =
             match i, env.code with
-            | 0, (l, _)
+            | 0, (l, _) ->
+                let c =
+                    tryLast res
+                    |> Option.defaultValue (CMD ")")
+                    |> fun (CMD n) -> n
+                    |> String.split [ ")" ]
+                    |> rev
+                    |> head
+                    |> CMD
+
+                let cs = limit (length res - 1) res
+                FN(l, cs) |> wrapFN c |> push' env
             | _, (l, []) -> FN(l, res) |> push' env
             | _, (_, c :: cs) ->
-                match c with
-                | CMD x when x.Contains "(" -> res ++ [ c ] |> fn (code env cs) (i + 1)
-                | CMD x when x.Contains ")" ->
-                    let i = i - 1
-
-                    (if i > 0 then res ++ [ c ] else res)
-                    |> fn (code env cs) i
-                | _ -> res ++ [ c ] |> fn (code env cs) i
+                res ++ [ c ]
+                |> fn
+                    (code env cs)
+                    (match c with
+                     | CMD x when x.Contains "(" -> i + 1
+                     | CMD x when x.Contains ")" -> i - 1
+                     | _ -> i)
 
         fn env 1 []
 
@@ -258,15 +294,12 @@ module LIB =
 
     let enum' = mod1 ANY.toInds
 
+    let len = mod1 (ANY.len >> BR >> NUM)
+
     let es env = arg1 env <| flip eval
 
     let quar env =
-        arg1 env
-        <| fun x env ->
-            evalr env x
-            |> PVec.tryLast
-            |> Option.defaultValue (UN())
-            |> push' env
+        arg1 env <| fun x env -> evalq env x |> push' env
 
     let typ = mod1 (ANY.typ >> option STR (NUM 0))
 
@@ -294,25 +327,50 @@ module LIB =
     let Lnot' = mod1 ANY.not'
     let Lnot = mod1 <| ANY.vec1 ANY.not'
 
-    let eln env =
-        arg1 env
-        <| fun x env ->
-            let (_, l), _ = env.code
-            eline env (l + ANY.toI x)
+    let gln env =
+        mod1
+            (ANY.vec1
+             <| fun x ->
+                 let (f, _), _ = env.code
+                 env.lines[f, ANY.toI x])
+            env
 
-    let eprev = NUM -1 |> push >> eln
-    let ehere = NUM 0 |> push >> eln
-    let enext = NUM 1 |> push >> eln
+    let eln env =
+        arg1 env <| fun x env -> ANY.toI x |> eline env
+
+    let gcurl env =
+        let (_, l), _ = env.code
+        BR l |> NUM |> push' env
+
+    let gcurf env =
+        let (f, _), _ = env.code
+        STR f |> push' env
+
+    let grel = gcurl >> Lplus >> gln
+    let erel = gcurl >> Lplus >> eln
+    let gprev = NUM -1 |> push >> grel
+    let eprev = NUM -1 |> push >> erel
+    let ghere = NUM 0 |> push >> grel
+    let ehere = NUM 0 |> push >> erel
+    let gnext = NUM 1 |> push >> grel
+    let enext = NUM 1 |> push >> erel
 
     let eStArr env =
         arg1 env
         <| fun x -> wrap'' >> push x >> quar >> unwrap'
+
+    let eArrSt env =
+        arg1 env
+        <| fun x -> unwrap' >> flip evale x >> wrap''
 
     let dot env =
         if snd env.code |> length = 0 then
             enext env
         else
             failwith "TODO"
+
+    let Lmap env =
+        mod2 (fun x f -> ANY.map (eval1 env f) x) env
 
     let SL =
         dict [ "type", typ
@@ -328,6 +386,8 @@ module LIB =
                ">?", Lun
                "form", form
 
+               "I>", inp
+               "I>_", inh
                ">O", out
                "n>O", outn
                "f>O", show
@@ -378,10 +438,12 @@ module LIB =
 
                "!", Lnot
                "!`", Lnot'
-               "&", Lnot
+               "&", TODO
                "&&", TODO
-               "|", Lnot
+               "|", TODO
+               "&`", TODO
                "||", TODO
+               "|`", TODO
 
                "(", startFN
                ")", id // TODO:?
@@ -390,8 +452,15 @@ module LIB =
                "@", ehere
                ";", enext
                ";;", eprev
-               "e@", eln
+               "@@", eln
+               "@~", erel
+               "g@", ghere
+               "g;", gnext
+               "g;;", gprev
+               "g@@", gln
+               "g@~", grel
                "$", eStArr
+               "'", eArrSt
 
                "[", startARR
                "]", endARR
@@ -401,12 +470,25 @@ module LIB =
                ",_", unwrap
                ",,_", unwrap'
                "enum", enum'
+               "len", len
+               "tk", TODO
+               "dp", TODO
+
+               "map", Lmap
+               "zip", TODO
+               "zipg", TODO
+               "tbl", TODO
+               "fold", TODO
+               "scan", TODO
+               "fltr", TODO
 
                "{", startARR
                "}", endMAP
 
                "UN", UN() |> push
                "OO", NUM infinity |> push
+               "$L", gcurl
+               "$F", gcurf
                "()", emptyFN
                "[]", emptyARR
 

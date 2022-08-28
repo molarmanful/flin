@@ -18,6 +18,7 @@ NUGET
       FSharp.Core (>= 6.0.2)
       MathNet.Numerics (>= 5.0)
     Microsoft.Win32.SystemEvents (6.0.1)
+    ReadLine (2.0.1)
     Spectre.Console (0.44)
     System.Configuration.ConfigurationManager (6.0)
       System.Security.Cryptography.ProtectedData (>= 6.0)

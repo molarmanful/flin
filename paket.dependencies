@@ -8,4 +8,5 @@ nuget Ficus
 nuget FSharpPlus
 nuget FSharpx.Collections
 nuget MathNet.Numerics.FSharp
+nuget ReadLine
 nuget Spectre.Console
