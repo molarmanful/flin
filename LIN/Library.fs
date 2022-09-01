@@ -484,8 +484,8 @@ module LIB =
                "!`", Lnot'
                "&", TODO
                "&&", TODO
-               "|", TODO
                "&`", TODO
+               "|", TODO
                "||", TODO
                "|`", TODO
 
