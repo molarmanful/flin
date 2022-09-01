@@ -1,5 +1,7 @@
 module rec LIN.ANY
 
+#nowarn "3391"
+
 open FSharpx.Collections
 open FSharpPlus
 open FSharpPlus.Data
@@ -38,7 +40,7 @@ let toForm a =
     | NUM x -> string x
     | STR x ->
         [ "\\", "\\\\"; "\"", "\\\"" ]
-        |> fold (flip <| (<||) replace) x
+        |> Seq.fold (flip <| (<||) replace) x
         |> sprintf "\"%s\""
     | CMD x -> x
     | FN ((_, l), x) ->
@@ -147,6 +149,8 @@ let fromI (n: int) = BR n |> NUM
 let toF = unNUM >> float
 let fromF (n: float) = BR n |> NUM
 
+let fromN n = string n |> BR.Parse |> NUM
+
 let fromNaN n =
     match n with
     | NUM x when BR.IsNaN x -> UN()
@@ -166,6 +170,11 @@ let toInds t =
     | FN _
     | STR _ -> toARR t |> toInds
     | _ -> mapi (fun i a -> RVec.ofSeq [ i; a ] |> ARR) t
+
+let toVar t =
+    match t with
+    | NUM _ -> t
+    | _ -> toSTR t
 
 let len t =
     match t with
@@ -234,6 +243,13 @@ let map f t =
     | Itr _ -> mapi (konst f) t
     | _ -> f t
 
+let fold f a t =
+    match t with
+    | SEQ x -> Seq.fold f a x
+    | ARR x -> RVec.fold f a x
+    | MAP x -> PMap.toSeq x |> Seq.fold (fun p (_, q) -> f p q) a
+    | _ -> f a t
+
 let filter f t =
     match t with
     | SEQ x -> Seq.filter f x |> SEQ
@@ -265,6 +281,11 @@ let vec2 f t s =
     match t, s with
     | Equiv _ -> zip f t s
     | _ -> table f t s
+
+let vef1 f a t =
+    match t with
+    | Itr _ -> fold (fun x y -> vef1 f x y) a t
+    | _ -> f a t
 
 let num1 f =
     vec1 (fun t ->
@@ -319,3 +340,5 @@ let trunc = num1 BR.Truncate
 let floor = num1 BR.Floor
 let round = num1 BR.Round
 let ceil = num1 BR.Ceiling
+
+let odef = Option.defaultValue (UN())

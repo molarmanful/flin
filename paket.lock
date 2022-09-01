@@ -32,3 +32,6 @@ NUGET
       System.Windows.Extensions (>= 6.0)
     System.Windows.Extensions (6.0)
       System.Drawing.Common (>= 6.0)
+GIT
+  remote: https://github.com/c-ohle/RationalNumerics.git
+     (33e73359b00e4e5bca6f95e026ebae72d6ad8d05)

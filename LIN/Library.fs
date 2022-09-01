@@ -1,11 +1,13 @@
 ﻿module rec LIN.ENV
 
-open System
+#nowarn "3391"
+
 open System.IO
 open Spectre.Console
 open FSharpx.Collections
 open FSharpPlus
 open Ficus.RRBVector
+open MathNet.Numerics.Random
 
 module RVec = RRBVector
 module PVec = PersistentVector
@@ -37,7 +39,7 @@ module HELP =
 
         if length fcs > 7 then
             let cs = take 7 fcs |> String.intercalate " "
-            ppprint $"[bold yellow]{c}[/] [grey]{cs} ...[/]"
+            ppprint $"[bold yellow]{c}[/] [grey]{cs} …[/]"
         elif length fcs = 0 then
             ppprint (
                 if d then
@@ -117,13 +119,10 @@ module HELP =
             |> push' env
         | _ -> ANY.toFN env s |> eval env
 
-    let evale env = eval env >> exec
+    let evale env = code env [] |> eval >> exec
     let evalr env s = (evale env s).stack
 
-    let evalq env =
-        evalr env
-        >> PVec.tryLast
-        >> Option.defaultValue (UN())
+    let evalq env = evalr env >> PVec.tryLast >> ANY.odef
 
     let evalS env f = stk env >> flip evalq f
     let evals env f = PVec.ofSeq >> evalS env f
@@ -179,11 +178,11 @@ module LIB =
             []
 
     let inp env =
-        let s = ReadLine.Read("")
+        let s = System.ReadLine.Read("")
         push (STR s) env
 
     let inh env =
-        let s = ReadLine.ReadPassword("")
+        let s = System.ReadLine.ReadPassword("")
         push (STR s) env
 
     let show = form >> outn
@@ -363,11 +362,52 @@ module LIB =
         arg1 env
         <| fun x -> unwrap' >> flip evale x >> wrap''
 
+    let rng env =
+        env.rng.NextFullRangeInt64()
+        |> ANY.fromN
+        |> push' env
+
+    let getS env =
+        mod1
+            (ANY.vec1
+             <| fun x ->
+                 let x = ANY.toVar x
+
+                 if env.scope.ContainsKey x then
+                     env.scope[x]
+                 else
+                     UN())
+            env
+
+    let setS env =
+        arg2 env
+        <| fun x y env ->
+            ANY.vef1
+                (fun e a ->
+                    let a = ANY.toVar a
+                    { e with scope = e.scope.Add(a, x) })
+                env
+                y
+
+    let modS env =
+        arg2 env
+        <| fun x y env ->
+            ANY.vef1
+                (fun e a ->
+                    let a = ANY.toVar a
+                    let res = push a e |> getS |> flip evalq x
+                    { e with scope = e.scope.Add(a, res) })
+                env
+                y
+
     let dot env =
-        if snd env.code |> length = 0 then
-            enext env
-        else
-            failwith "TODO"
+        match snd env.code with
+        | [] -> enext env
+        | c :: cs ->
+            let env = code env cs
+
+            match c with
+            | _ -> push c env |> getS
 
     let Lmap env =
         mod2 (fun x f -> ANY.map (eval1 env f) x) env
@@ -385,6 +425,10 @@ module LIB =
                ">!", Lbool
                ">?", Lun
                "form", form
+
+               ":", getS
+               "=:", setS
+               ">:", modS
 
                "I>", inp
                "I>_", inh
@@ -469,7 +513,7 @@ module LIB =
                ",`", wrap''
                ",_", unwrap
                ",,_", unwrap'
-               "enum", enum'
+               "k,v", enum'
                "len", len
                "tk", TODO
                "dp", TODO
@@ -480,6 +524,9 @@ module LIB =
                "tbl", TODO
                "fold", TODO
                "scan", TODO
+               "foldr", TODO
+               "scanr", TODO
+               "scan", TODO
                "fltr", TODO
 
                "{", startARR
@@ -489,6 +536,7 @@ module LIB =
                "OO", NUM infinity |> push
                "$L", gcurl
                "$F", gcurf
+               "$R", rng
                "()", emptyFN
                "[]", emptyARR
 
@@ -527,6 +575,7 @@ let run (s, v, i) file lines =
           lines = lines
           scope = PMap.empty
           arr = []
+          rng = Random.shared
           STEP = s
           VERB = v
           IMPL = i }
