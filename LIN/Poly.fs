@@ -120,6 +120,8 @@ let toNUM t =
     | FN _ -> toSTR t |> toNUM
     | UN _ -> NUM 0
 
+let toSTR = string >> STR
+
 let unNUM n =
     let (NUM n) = toNUM n
     n
@@ -128,20 +130,32 @@ let unSTR n =
     let (STR n) = toSTR n
     n
 
-let toBOOL n =
-    let toN b = NUM(if b then 1 else 0)
+let unSEQ n =
+    let (SEQ n) = toSEQ n
+    n
 
-    toN (
-        match n with
-        | NUM x -> x <> 0
-        | STR x -> x <> ""
-        | ARR x -> x <> RVec.empty
-        | MAP x -> x <> PMap.empty
-        | SEQ x -> x <> Seq.empty
-        | FN (_, x) -> x <> []
-        | CMD _ -> true
-        | UN _ -> false
-    )
+let unARR n =
+    let (ARR n) = toARR n
+    n
+
+let unMAP n =
+    let (MAP n) = toMAP n
+    n
+
+let fromBOOL b = NUM(if b then 1 else 0)
+
+let toBOOL n =
+    match n with
+    | NUM x -> x <> 0
+    | STR x -> x <> ""
+    | ARR x -> x <> RVec.empty
+    | MAP x -> x <> PMap.empty
+    | SEQ x -> x <> Seq.empty
+    | FN (_, x) -> x <> []
+    | CMD _ -> true
+    | UN _ -> false
+
+let tru = toBOOL >> fromBOOL
 
 let toI = unNUM >> int
 let fromI (n: int) = BR n |> NUM
@@ -156,25 +170,22 @@ let fromNaN n =
     | NUM x when BR.IsNaN x -> UN()
     | _ -> n
 
-let toSTR = string >> STR
-
 let not' t =
-    if toBOOL t = NUM 0 then
-        NUM 1
-    else
-        NUM 0
+    if toBOOL t |> not then NUM 1 else NUM 0
 
 let toInds t =
     match t with
-    | MAP _ -> toARR t
-    | FN _
-    | STR _ -> toARR t |> toInds
-    | _ -> mapi (fun i a -> RVec.ofSeq [ i; a ] |> ARR) t
+    | MAP _ -> toSEQ t
+    | SEQ _ -> mapi (fun i a -> lARR [ i; a ]) t
+    | _ -> toSEQ t |> toInds
 
 let toVar t =
     match t with
     | NUM _ -> t
     | _ -> toSTR t
+
+let lSEQ = toSeq >> SEQ
+let lARR = RVec.ofSeq >> ARR
 
 let len t =
     match t with
@@ -243,6 +254,13 @@ let map f t =
     | Itr _ -> mapi (konst f) t
     | _ -> f t
 
+let flat t =
+    match t with
+    | SEQ x -> Seq.collect unSEQ x |> SEQ
+    | ARR x -> RVec.collect unARR x |> ARR
+    | MAP x -> PMap.toSeq x |> Seq.map snd |> SEQ |> flat
+    | _ -> t
+
 let fold f a t =
     match t with
     | SEQ x -> Seq.fold f a x
@@ -251,6 +269,8 @@ let fold f a t =
     | _ -> f a t
 
 let filter f t =
+    let f = f >> toBOOL
+
     match t with
     | SEQ x -> Seq.filter f x |> SEQ
     | ARR x -> RVec.filter f x |> ARR
@@ -259,6 +279,7 @@ let filter f t =
         |> Seq.filter (fun (_, a) -> f a)
         |> PMap.ofSeq
         |> MAP
+    | _ -> f t |> fromBOOL
 
 let zip f t s =
     match t, s with
@@ -287,26 +308,41 @@ let vef1 f a t =
     | Itr _ -> fold (fun x y -> vef1 f x y) a t
     | _ -> f a t
 
-let num1 f =
-    vec1 (fun t ->
-        match t with
-        | NUM x -> f x |> NUM
-        | _ -> toNUM t |> num1 f)
+let num1 f = vec1 (unNUM >> f >> NUM)
+let str1 f = vec1 (unSTR >> f >> STR)
 
 let num2 f =
-    vec2 (fun t s ->
-        match t, s with
-        | NUM x, NUM y -> f x y |> NUM
-        | _ -> num2 f (toNUM t) (toNUM s))
+    vec2 <| fun t s -> f (unNUM t) (unNUM s) |> NUM
 
 let str2 f =
-    vec2 (fun t s ->
-        match t, s with
-        | STR x, STR y -> f x y |> STR
-        | _ -> str2 f (toSTR t) (toSTR s))
+    vec2 <| fun t s -> f (unSTR t) (unSTR s) |> STR
 
+let strnum2 f =
+    vec2 <| fun t s -> f (unSTR t) (unNUM s) |> STR
 
-let neg = num1 <| (~-)
+let has t s =
+    match s with
+    | SEQ x -> Seq.contains t x
+    | ARR x -> RVec.contains t x
+    | MAP x -> PMap.toSeq x |> Seq.exists (snd >> (=) t)
+    | STR x -> String.isSubString (string t) x
+    | _ -> has (toSTR t) s
+
+let eq t s =
+    match t, s with
+    | FN (_, x), FN (_, y) -> x = y
+    | _ -> t = s
+
+let neg = num1 (~-)
+let neg' = str1 String.rev
+
+let neg'' t =
+    match t with
+    | SEQ x -> Seq.rev x |> SEQ
+    | ARR x -> RVec.rev x |> ARR
+    | MAP x -> PMap.toSeq x |> Seq.rev |> PMap.ofSeq |> MAP
+    | FN (p, x) -> FN(p, List.rev x)
+    | _ -> neg' t
 
 let Lplus = num2 (+)
 let Lplus' = str2 (++)
@@ -319,26 +355,57 @@ let Lplus'' t s =
         PMap.toSeq y
         |> Seq.fold (fun c (a, b) -> PMap.add a b c) x
         |> MAP
-    | SEQ _, x -> t </ Lplus'' /> (toSeq [ x ] |> SEQ)
-    | ARR _, x -> t </ Lplus'' /> (RVec.ofSeq [ x ] |> ARR)
-    | x, SEQ _ -> toSeq [ x ] |> SEQ </ Lplus'' /> s
-    | x, ARR _ -> RVec.ofSeq [ x ] |> ARR </ Lplus'' /> s
+    | FN (p, x), FN (_, y) -> FN(p, x ++ y)
+    | SEQ _, _ -> Lplus'' t (lSEQ [ s ])
+    | _, SEQ _ -> Lplus'' (lSEQ [ t ]) s
+    | ARR _, _ -> Lplus'' t (lARR [ t ])
+    | _, ARR _ -> Lplus'' (lARR [ t ]) s
+    | FN (p, x), _ -> FN(p, x ++ [ s ])
+    | _, FN (p, x) -> FN(p, [ s ] ++ x)
+    | _ -> Lplus' t s
 
 let Lsub = num2 (-)
+let Lsub' = str2 <| fun x y -> String.replace y "" x
+
+let Lsub'' t s =
+    match t, s with
+    | Itr _, Itr _ -> filter (flip has s >> not >> fromBOOL) t
+    | Itr _, _ -> filter (eq s >> not >> fromBOOL) t
+    | _ -> Lsub' t s
 
 let Lmul = num2 (*)
+let Lmul' = strnum2 <| fun x y -> String.replicate (int y) x
+
+let Lmul'' t s =
+    let rep = toI >> Seq.replicate
+    let arep = toI >> RVec.replicate
+
+    match t, s with
+    | Itr _, Itr _ ->
+        mapi
+            (fun i y ->
+                SEQ(
+                    match get i t, y with
+                    | UN _, _ -> Seq.empty
+                    | Itr x, Itr _ -> Lmul'' x y |> Seq.singleton
+                    | x, _ -> rep y x
+                ))
+            s
+        |> flat
+    | ARR _, _ -> arep s t |> ARR |> flat
+    | _ -> rep s t |> SEQ |> flat
 
 let Ldiv t = num2 (/) t >> fromNaN
 
 let Lmod = num2 mod'
 
-let Lpow = num2 (fun x y -> BR.Pow(x, y, BR.MaxDigits))
+let Lpow = num2 <| fun x y -> BR.Pow(x, y, BR.MaxDigits)
 
-let bNOT = num1 (fun x -> -1L - x)
+let bNOT = num1 <| fun x -> -1L - x
 
 let trunc = num1 BR.Truncate
 let floor = num1 BR.Floor
 let round = num1 BR.Round
 let ceil = num1 BR.Ceiling
 
-let odef = Option.defaultValue (UN())
+let odef = Option.defaultValue <| UN()

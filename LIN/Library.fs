@@ -32,8 +32,11 @@ module HELP =
         let c = ANY.toForm c
         let fcs = map ANY.toForm xs
 
-        PVec.map (ANY.toForm >> printfn "%s") env.stack
-        |> ignore
+        let p () =
+            PVec.map (ANY.toForm >> printfn "%s") env.stack
+            |> ignore
+
+        if d <> 1 then p ()
 
         pprint "[dim grey]———>[/]"
 
@@ -42,7 +45,7 @@ module HELP =
             ppprint $"[bold yellow]{c}[/] [grey]{cs} …[/]"
         elif length fcs = 0 then
             ppprint (
-                if d then
+                if d > 0 then
                     $"[dim green](END)[/]"
                 else
                     $"[bold yellow]{c}[/]"
@@ -52,6 +55,8 @@ module HELP =
             ppprint $"[bold yellow]{c}[/] [grey]{cs}[/]"
 
         ppprint $"[dim grey]———({f}:{l})[/]"
+
+        if d > 0 then p ()
 
     let stk env st = { env with stack = st }
 
@@ -218,14 +223,19 @@ module LIB =
 
     let dip env =
         arg2 env
-        <| fun x y env1 -> evalr env1 y |> stk env1 |> push x
+        <| fun x y env -> evalr env y |> stk env |> push x
 
     let neg = mod1 ANY.neg
+    let neg' = mod1 ANY.neg'
     let Lplus = mod2 ANY.Lplus
     let Lplus' = mod2 ANY.Lplus'
     let Lplus'' = mod2 ANY.Lplus''
     let Lsub = mod2 ANY.Lsub
+    let Lsub' = mod2 ANY.Lsub'
+    let Lsub'' = mod2 ANY.Lsub''
     let Lmul = mod2 ANY.Lmul
+    let Lmul' = mod2 ANY.Lmul'
+    let Lmul'' = mod2 ANY.Lmul''
     let Ldiv = mod2 ANY.Ldiv
     let Lmod = mod2 ANY.Lmod
     let Ldivmod = mod2s <| fun x y -> [ ANY.Ldiv x y; ANY.Lmod x y ]
@@ -275,6 +285,7 @@ module LIB =
             |> push' { stk env s with arr = ss }
 
     let endMAP env = endARR env |> LMap
+    let endSEQ env = endARR env |> Lseq
 
     let emptyFN env = UN() |> ANY.toFN env |> push' env
     let emptyARR = UN() |> ANY.toARR |> push
@@ -297,6 +308,17 @@ module LIB =
 
     let es env = arg1 env <| flip eval
 
+    let etimes env =
+        arg2 env
+        <| fun f x env ->
+            let f = ANY.toFN env f
+            let x = ANY.unNUM x
+
+            if x > 0 then
+                evale env f |> pushs [ f; NUM(x - 1L) ] |> etimes
+            else
+                env
+
     let quar env =
         arg1 env <| fun x env -> evalq env x |> push' env
 
@@ -308,7 +330,7 @@ module LIB =
     let Lseq = mod1 ANY.toSEQ
     let Larr = mod1 ANY.toARR
     let LMap = mod1 ANY.toMAP
-    let Lbool = mod1 ANY.toBOOL
+    let Lbool = mod1 ANY.tru
 
     let Lun =
         mod1
@@ -411,6 +433,12 @@ module LIB =
 
     let Lmap env =
         mod2 (fun x f -> ANY.map (eval1 env f) x) env
+    
+    let Lfold env =
+        mod3 (fun x a f -> ANY.fold (eval2 env f) a x) env
+
+    let fltr env =
+        mod2 (fun x f -> ANY.filter (eval1 env f) x) env
 
     let SL =
         dict [ "type", typ
@@ -453,17 +481,17 @@ module LIB =
                "dip", dip
 
                "_", neg
-               "__", TODO
+               "__", neg'
                "_`", TODO
                "+", Lplus
                "++", Lplus'
                "+`", Lplus''
                "-", Lsub
-               "--", TODO
-               "-`", TODO
+               "--", Lsub'
+               "-`", Lsub''
                "*", Lmul
-               "**", TODO
-               "*`", TODO
+               "**", Lmul'
+               "*`", Lmul''
                "/", Ldiv
                "//", TODO
                "/`", TODO
@@ -488,10 +516,18 @@ module LIB =
                "|", TODO
                "||", TODO
                "|`", TODO
+               "=", TODO
+               "!=", TODO
+               "<", TODO
+               ">", TODO
+               "<=", TODO
+               ">=", TODO
+               "<=>", TODO
 
                "(", startFN
                ")", id // TODO:?
                "#", es
+               "*#", etimes
                "Q", quar
                "@", ehere
                ";", enext
@@ -513,7 +549,7 @@ module LIB =
                ",`", wrap''
                ",_", unwrap
                ",,_", unwrap'
-               "k,v", enum'
+               ">kv", enum'
                "len", len
                "tk", TODO
                "dp", TODO
@@ -522,15 +558,17 @@ module LIB =
                "zip", TODO
                "zipg", TODO
                "tbl", TODO
-               "fold", TODO
+               "fold", Lfold
                "scan", TODO
                "foldr", TODO
                "scanr", TODO
                "scan", TODO
-               "fltr", TODO
+               "fltr", fltr
 
                "{", startARR
                "}", endMAP
+
+               "]`", endSEQ
 
                "UN", UN() |> push
                "OO", NUM infinity |> push
@@ -548,10 +586,13 @@ let exec env =
     | (p, c :: cs) -> lcode env (p, cs) |> execA c |> exec
 
 let execA c env =
-    if env.STEP then TODO 0
-
     if env.STEP || env.VERB then
-        pTrace c env false
+        if env.STEP then AnsiConsole.Clear()
+        pTrace c env 0
+
+        if env.STEP then
+            AnsiConsole.Markup "[dim]ENTER to continue...[/]"
+            System.Console.ReadLine() |> ignore
 
     match c with
     | NUM _
@@ -583,8 +624,10 @@ let run (s, v, i) file lines =
     eline env 0
     |> exec
     |> tap (fun env ->
-        if env.STEP || env.VERB || env.IMPL then
-            pTrace (UN()) env true)
+        if env.STEP || env.IMPL then
+            pTrace (UN()) env 1
+        elif env.VERB then
+            pTrace (UN()) env 2)
 
 let runf o f =
     File.ReadLines f
