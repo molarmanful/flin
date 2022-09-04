@@ -38,6 +38,7 @@ jobs:
           tag=$(git describe --tags --abbrev=0)
           release_name="flin-$tag-${{ matrix.target }}"
 
+          dotnet tool restore
           dotnet publish --runtime "${{ matrix.target }}" -c Release -o "$release_name"
 
           if [ "${{ matrix.target }}" == "win-x64" ]; then
