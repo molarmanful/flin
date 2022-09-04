@@ -9,7 +9,7 @@ NUGET
     Ficus (0.0.1)
       FSharp.Core (>= 4.3.4)
     FSharp.Core (6.0.5)
-    FSharpPlus (1.2.4)
+    FSharpPlus (1.2.5)
       FSharp.Core (>= 4.6.2)
     FSharpx.Collections (3.0.1)
       FSharp.Core (>= 4.3.4)
@@ -32,6 +32,3 @@ NUGET
       System.Windows.Extensions (>= 6.0)
     System.Windows.Extensions (6.0)
       System.Drawing.Common (>= 6.0)
-GIT
-  remote: https://github.com/c-ohle/RationalNumerics.git
-     (33e73359b00e4e5bca6f95e026ebae72d6ad8d05)
