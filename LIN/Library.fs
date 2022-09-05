@@ -650,8 +650,6 @@ let execA c env =
             System.Console.ReadLine() |> ignore
 
     match c with
-    | NUM _
-    | STR _ -> push c env
     | CMD x ->
         if x.StartsWith '\\' && x.Length > 1 then
             drop 1 x |> CMD |> ANY.toFN env |> push' env
@@ -663,6 +661,7 @@ let execA c env =
             LIB.SL[x](env)
         else
             ANY.mkE env ERR_UNK_FN x
+    | _ -> push c env
 
 let run (s, v, i) file lines =
     let env =
