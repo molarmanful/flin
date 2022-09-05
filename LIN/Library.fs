@@ -615,10 +615,9 @@ module LIB =
                "zipg", TODO
                "tbl", TODO
                "fold", Lfold
-               "scan", TODO
                "foldr", TODO
-               "scanr", TODO
                "scan", TODO
+               "scanr", TODO
                "fltr", fltr
 
                "{", startARR
