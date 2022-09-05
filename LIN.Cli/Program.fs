@@ -35,15 +35,5 @@ let main argv =
         0
     with
     | e ->
-        let err m =
-            AnsiConsole.MarkupLineInterpolated $"[red]ERR: {m}[/]"
-
-        err (
-            match e with
-            | ERR_PARSE x -> $"bad syntax \"{x}\""
-            | ERR_ST_LEN ((f, l), x) -> $"""stack length < {x} @ {f}:{l}"""
-            | ERR_UNK_FN ((f, l), x) -> $"""unknown fn "{x}" @ {f}:{l}"""
-            | _ -> e.Message
-        )
-
+        AnsiConsole.MarkupLineInterpolated $"[red]ERR: {ENV.HELP.errStr e}[/]"
         1

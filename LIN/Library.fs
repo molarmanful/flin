@@ -58,6 +58,15 @@ module HELP =
 
         if d > 0 then p ()
 
+    let errStr e =
+        match e with
+        | ERR_PARSE x -> $"bad syntax \"{x}\""
+        | ERR_ST_LEN ((f, l), x) -> $"stack length < {x} @ {f}:{l}"
+        | ERR_UNK_FN ((f, l), x) -> $"""unknown fn "{x}" @ {f}:{l}"""
+        | ERR_MATCH ((f, l), (x, y)) -> $"no match {ANY.toForm x} -> {ANY.toForm y} @ {f}:{l}"
+        | ERR_CAST ((f, l), (x, y)) -> $"bad cast {ANY.toForm x} -> {y} @ {f}:{l}"
+        | _ -> $"(other) {e.Message}"
+
     let stk env st = { env with stack = st }
 
     let code env xs =
@@ -287,6 +296,17 @@ module LIB =
     let endMAP env = endARR env |> LMap
     let endSEQ env = endARR env |> Lseq
 
+    let endIf env =
+        arg2 (endMAP env)
+        <| fun x y env ->
+            let a =
+                ANY.unMAP y
+                |> Seq.tryFind (fun (f, _) -> eval1 env f x |> ANY.toBOOL)
+
+            match a with
+            | Some (_, g) -> eval env g
+            | _ -> ANY.mkE env ERR_MATCH (x, y)
+
     let emptyFN env = UN() |> ANY.toFN env |> push' env
     let emptyARR = UN() |> ANY.toARR |> push
 
@@ -338,10 +358,30 @@ module LIB =
 
     let Lstr = mod1 ANY.toSTR
     let Lfn env = mod1 (ANY.toFN env) env
-    let Lnum = mod1 ANY.toNUM
+
+    let Lnum env =
+        mod1
+            (fun x ->
+                try
+                    ANY.toNUM x
+                with
+                | ERR_cast (a, b) -> ANY.mkE env ERR_CAST (a, b)
+                | e -> raise e)
+            env
+
     let Lseq = mod1 ANY.toSEQ
     let Larr = mod1 ANY.toARR
-    let LMap = mod1 ANY.toMAP
+
+    let LMap env =
+        mod1
+            (fun x ->
+                try
+                    ANY.toMAP x
+                with
+                | ERR_cast (a, b) -> ANY.mkE env ERR_CAST (a, b)
+                | e -> raise e)
+            env
+
     let Lbool = mod1 ANY.tru
 
     let Lun =
@@ -542,6 +582,7 @@ module LIB =
                "&#", eand
                "|#", eor
                "?#", eif
+               "}?", endIf
                "*#", etimes
                "Q", quar
                "@", ehere

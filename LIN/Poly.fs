@@ -112,6 +112,7 @@ let toMAP t =
         |> MAP
     | ARR _ -> toSEQ t |> toMAP
     | UN _ -> MAP PMap.empty
+    | _ -> ERR_cast(t, "map") |> raise
 
 let toNUM t =
     match t with
@@ -119,6 +120,7 @@ let toNUM t =
     | STR x -> BR.Parse x |> NUM
     | FN _ -> toSTR t |> toNUM
     | UN _ -> NUM 0
+    | _ -> ERR_cast(t, "num") |> raise
 
 let toSTR = string >> STR
 
