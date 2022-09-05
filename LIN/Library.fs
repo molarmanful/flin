@@ -308,6 +308,18 @@ module LIB =
 
     let es env = arg1 env <| flip eval
 
+    let eand env =
+        arg2 env
+        <| fun x f env -> if ANY.toBOOL x then eval env f else env
+
+    let eor env =
+        arg2 env
+        <| fun x f env -> if ANY.toBOOL x then env else eval env f
+
+    let eif env =
+        arg3 env
+        <| fun x f g env -> eval env (if ANY.toBOOL x then f else g)
+
     let etimes env =
         arg2 env
         <| fun f x env ->
@@ -433,7 +445,7 @@ module LIB =
 
     let Lmap env =
         mod2 (fun x f -> ANY.map (eval1 env f) x) env
-    
+
     let Lfold env =
         mod3 (fun x a f -> ANY.fold (eval2 env f) a x) env
 
@@ -444,8 +456,8 @@ module LIB =
         dict [ "type", typ
                ">S", Lstr
                ">N", Lnum
-               ">Nf", nform
-               ">Ns", nstd
+               "N>f", nform
+               "N>s", nstd
                ">F", Lfn
                ">A", Larr
                ">M", LMap
@@ -527,6 +539,9 @@ module LIB =
                "(", startFN
                ")", id // TODO:?
                "#", es
+               "&#", eand
+               "|#", eor
+               "?#", eif
                "*#", etimes
                "Q", quar
                "@", ehere
