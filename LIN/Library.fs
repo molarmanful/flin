@@ -282,6 +282,9 @@ module LIB =
 
         fn env 1 []
 
+    let wrFN env =
+        wrap' env |> mod1 (fun x -> ANY.toFN env x)
+
     let startARR env =
         { stk env PVec.empty with arr = env.stack :: env.arr }
 
@@ -310,8 +313,8 @@ module LIB =
     let emptyFN env = UN() |> ANY.toFN env |> push' env
     let emptyARR = UN() |> ANY.toARR |> push
 
-    let wrap = mod1 <| fun x -> RVec.ofSeq [ x ] |> ARR
-    let wrap' = mod2 <| fun x y -> RVec.ofSeq [ x; y ] |> ARR
+    let wrap = mod2 <| fun x y -> ANY.lARR [ x; y ]
+    let wrap' = mod1 <| fun x -> ANY.lARR [ x ]
 
     let wrap'' env =
         stk env PVec.empty
@@ -324,7 +327,11 @@ module LIB =
 
     let enum' = mod1 ANY.toInds
 
-    let len = mod1 (ANY.len >> BR >> NUM)
+    let keys = mod1 ANY.keys
+    let vals = mod1 ANY.keys
+
+    let len = mod1 (ANY.len >> ANY.fromI)
+    let dep = mod1 (ANY.dep >> ANY.fromI)
 
     let es env = arg1 env <| flip eval
 
@@ -484,13 +491,22 @@ module LIB =
             | _ -> push c env |> getS
 
     let Lmap env =
-        mod2 (fun x f -> ANY.map (eval1 env f) x) env
+        mod2 (fun x f -> ANY.vec1 (fun f -> ANY.map (eval1 env f) x) f) env
 
     let Lfold env =
-        mod3 (fun x a f -> ANY.fold (eval2 env f) a x) env
+        mod3 (fun x a f -> ANY.vec1 (fun f -> ANY.fold (eval2 env f) a x) f) env
 
     let fltr env =
-        mod2 (fun x f -> ANY.filter (eval1 env f) x) env
+        mod2 (fun x f -> ANY.vec1 (fun f -> ANY.filter (eval1 env f) x) f) env
+
+    let rmap env =
+        mod2 (fun x f -> ANY.vec1 (fun f -> ANY.rmap (eval2 env f) x) f) env
+
+    let dmap env =
+        mod3 (fun x f d -> ANY.vec2 (fun f d -> ANY.dmap (eval2 env f) (ANY.toI d) x) f d) env
+
+    let walk env =
+        mod2 (fun x f -> ANY.vec1 (fun f -> ANY.walk (eval2 env f) x) f) env
 
     let SL =
         dict [ "type", typ
@@ -578,6 +594,7 @@ module LIB =
 
                "(", startFN
                ")", id // TODO:?
+               "\\", wrFN
                "#", es
                "&#", eand
                "|#", eor
@@ -606,7 +623,10 @@ module LIB =
                ",_", unwrap
                ",,_", unwrap'
                ">kv", enum'
+               ">k", keys
+               ">v", vals
                "len", len
+               "dep", dep
                "tk", TODO
                "dp", TODO
 
@@ -619,6 +639,10 @@ module LIB =
                "scan", TODO
                "scanr", TODO
                "fltr", fltr
+
+               "rmap", rmap
+               "dmap", dmap
+               "walk", walk
 
                "{", startARR
                "}", endMAP

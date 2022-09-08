@@ -270,6 +270,56 @@ let fold f a t =
     | MAP x -> PMap.toSeq x |> Seq.fold (fun p (_, q) -> f p q) a
     | _ -> f a t
 
+let dep t =
+    match t with
+    | Itr _ -> 1 + fold (fun a b -> max a <| dep b) 0 t
+    | _ -> 0
+
+let keys t =
+    match t with
+    | MAP x -> PMap.toSeq x |> Seq.map fst |> SEQ
+    | _ -> toSEQ t |> mapi (fun i _ -> i)
+
+let vals t =
+    match t with
+    | MAP x -> PMap.toSeq x |> Seq.map snd |> SEQ
+    | _ -> toSEQ t
+
+let rmap f t =
+    let rec m f i t =
+        match t with
+        | Itr _ -> mapi (fun j x -> m f (Lplus'' i j) x) t
+        | _ -> f i t
+
+    m f (lARR []) t
+
+let dmap f d t =
+    let rec m f i t d =
+        if d < 0 then
+            m f i t (d </ mod' /> dep t)
+        elif d = 0 then
+            f i t
+        else
+            match t with
+            | Itr _ -> mapi (fun j x -> m f (Lplus'' i j) x (d - 1)) t
+            | _ -> f i t
+
+    if d = 0 then
+        rmap f t
+    else
+        m f (lARR []) t d
+
+let walk f t =
+    let rec m f i =
+        mapi (fun j x ->
+            let i = (Lplus'' i j)
+
+            match f i x with
+            | Itr _ -> m f i x
+            | a -> a)
+
+    m f (lARR []) t
+
 let filter f t =
     let f = f >> toBOOL
 
@@ -360,7 +410,7 @@ let Lplus'' t s =
     | FN (p, x), FN (_, y) -> FN(p, x ++ y)
     | SEQ _, _ -> Lplus'' t (lSEQ [ s ])
     | _, SEQ _ -> Lplus'' (lSEQ [ t ]) s
-    | ARR _, _ -> Lplus'' t (lARR [ t ])
+    | ARR _, _ -> Lplus'' t (lARR [ s ])
     | _, ARR _ -> Lplus'' (lARR [ t ]) s
     | FN (p, x), _ -> FN(p, x ++ [ s ])
     | _, FN (p, x) -> FN(p, [ s ] ++ x)
