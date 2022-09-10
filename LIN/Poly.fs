@@ -278,6 +278,19 @@ let fold f a t =
     | MAP x -> PMap.toSeq x |> Seq.fold (fun p (_, q) -> f p q) a
     | _ -> f a t
 
+let scan f a t =
+    let sc f a = Seq.scan f a >> Seq.tail
+
+    match t with
+    | SEQ x -> sc f a x |> SEQ
+    | ARR x -> RVec.scan f a x |> RVec.tail |> ARR
+    | MAP x ->
+        PMap.toSeq x
+        |> sc (fun (_, p) (k, q) -> (k, f p q)) (UN(), a)
+        |> PMap.ofSeq
+        |> MAP
+    | _ -> f a t
+
 let dep t =
     match t with
     | Itr _ -> 1 + fold (fun a b -> max a <| dep b) 0 t

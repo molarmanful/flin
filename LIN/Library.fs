@@ -515,10 +515,12 @@ module LIB =
             (fun x y f ->
                 ANY.vec1
                     (fun f ->
-                        try ANY.sZip (eval2 env f) x y
+                        try
+                            ANY.sZip (eval2 env f) x y
                         with
                         | ERR_zip (a, b) -> ANY.mkE env ERR_ZIP (a, b)
-                        | e -> raise e) f)
+                        | e -> raise e)
+                    f)
             env
 
     let tbl env =
@@ -526,6 +528,9 @@ module LIB =
 
     let Lfold env =
         mod3 (fun x a f -> ANY.vec1 (fun f -> ANY.fold (eval2 env f) a x) f) env
+
+    let Lscan env =
+        mod3 (fun x a f -> ANY.vec1 (fun f -> ANY.scan (eval2 env f) a x) f) env
 
     let fltr env =
         mod2 (fun x f -> ANY.vec1 (fun f -> ANY.filter (eval1 env f) x) f) env
@@ -671,9 +676,7 @@ module LIB =
                "zip", Lzip
                "tbl", tbl
                "fold", Lfold
-               "foldr", TODO
-               "scan", TODO
-               "scanr", TODO
+               "scan", Lscan
                "fltr", fltr
 
                "rmap", rmap
