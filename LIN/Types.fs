@@ -69,3 +69,5 @@ exception ERR_UNK_FN of PATH * string
 exception ERR_CAST of PATH * (ANY * string)
 exception ERR_cast of ANY * string
 exception ERR_MATCH of PATH * (ANY * ANY)
+exception ERR_ZIP of PATH * (ANY * ANY)
+exception ERR_zip of ANY * ANY

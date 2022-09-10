@@ -73,13 +73,22 @@ let modStack'' f = modStack' <| fun (ARR x) -> f x
 let toFN env = fst env.code |> toCode >> FN
 let iFN env i = toCode (fst env.code |> fst, i) >> FN
 
+let toTups t =
+    match t with
+    | MAP x -> PMap.toSeq x
+    | SEQ x -> Seq.mapi (fun i a -> (NUM i, a)) x
+    | _ -> toSEQ t |> toTups
+
+let toInds t =
+    toTups t
+    |> Seq.map (fun (i, v) -> lARR [ i; v ])
+    |> SEQ
+
 let toSEQ t =
     match t with
     | SEQ _ -> t
     | ARR x -> RVec.toSeq x |> SEQ
-    | MAP x ->
-        Seq.map (fun (a, b) -> RVec.ofSeq [ a; b ] |> ARR) x
-        |> SEQ
+    | MAP _ -> toInds t
     | NUM _
     | CMD _ -> SEQ [ t ]
     | STR x -> Seq.map (string >> STR) x |> SEQ
@@ -175,12 +184,6 @@ let fromNaN n =
 let not' t =
     if toBOOL t |> not then NUM 1 else NUM 0
 
-let toInds t =
-    match t with
-    | MAP _ -> toSEQ t
-    | SEQ _ -> mapi (fun i a -> lARR [ i; a ]) t
-    | _ -> toSEQ t |> toInds
-
 let toVar t =
     match t with
     | NUM _ -> t
@@ -199,11 +202,16 @@ let len t =
     | CMD _ -> toSTR t |> len
     | _ -> 0
 
-let (|Itr|_|) t =
+let (|It|_|) t =
     match t with
     | ARR _
-    | MAP _
     | SEQ _ -> Some t
+    | _ -> None
+
+let (|Itr|_|) t =
+    match t with
+    | MAP _
+    | It _ -> Some t
     | _ -> None
 
 let (|Equiv|_|) (t, s) =
@@ -275,15 +283,25 @@ let dep t =
     | Itr _ -> 1 + fold (fun a b -> max a <| dep b) 0 t
     | _ -> 0
 
-let keys t =
-    match t with
-    | MAP x -> PMap.toSeq x |> Seq.map fst |> SEQ
-    | _ -> toSEQ t |> mapi (fun i _ -> i)
+let keys = toTups >> Seq.map fst >> SEQ
+let vals = toTups >> Seq.map snd >> SEQ
 
-let vals t =
-    match t with
-    | MAP x -> PMap.toSeq x |> Seq.map snd |> SEQ
-    | _ -> toSEQ t
+let rKV kv walk t =
+    let rec m i t =
+        seq {
+            for k, v in toTups t do
+                let i = Lplus'' i k
+                let x = if kv then v else i
+
+                if walk then yield x
+
+                yield!
+                    match v with
+                    | Itr _ -> m i v
+                    | _ -> if walk then seq [] else seq [ x ]
+        }
+
+    m (lARR []) t |> SEQ
 
 let rmap f t =
     let rec m f i t =
@@ -337,6 +355,26 @@ let zip f t s =
     match t, s with
     | Itr _, Itr _ -> mapi (fun i x -> get i s |> f x) t
     | _ -> table f t s
+
+let sZip f t s =
+    match t, s with
+    | MAP x, Itr _ ->
+        PMap.toSeq x
+        |> Seq.fold
+            (fun a (k, v) ->
+                match get k s with
+                | UN _ -> a
+                | w -> PMap.add k (f v w) a)
+            PMap.empty
+        |> MAP
+    | Itr _, MAP _ -> sZip (flip f) s t
+    | _, MAP _ -> sZip f (toSEQ t) s
+    | MAP _, _ -> sZip f t (toSEQ s)
+    | Itr _, Itr _ ->
+        Seq.zip (unSEQ t) (unSEQ s)
+        |> Seq.map ((<||) f)
+        |> SEQ
+    | _ -> f t s
 
 let table f t s =
     match t, s with

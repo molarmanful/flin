@@ -65,6 +65,7 @@ module HELP =
         | ERR_UNK_FN ((f, l), x) -> $"""unknown fn "{x}" @ {f}:{l}"""
         | ERR_MATCH ((f, l), (x, y)) -> $"no match {ANY.toForm x} -> {ANY.toForm y} @ {f}:{l}"
         | ERR_CAST ((f, l), (x, y)) -> $"bad cast {ANY.toForm x} -> {y} @ {f}:{l}"
+        | ERR_ZIP ((f, l), (x, y)) -> $"bad zip {ANY.toForm x} -> {ANY.toForm y} @ {f}:{l}"
         | _ -> $"(other) {e.Message}"
 
     let stk env st = { env with stack = st }
@@ -285,6 +286,9 @@ module LIB =
     let wrFN env =
         wrap' env |> mod1 (fun x -> ANY.toFN env x)
 
+    let pairFN env =
+        wrap env |> mod1 (fun x -> ANY.toFN env x)
+
     let startARR env =
         { stk env PVec.empty with arr = env.stack :: env.arr }
 
@@ -328,7 +332,11 @@ module LIB =
     let enum' = mod1 ANY.toInds
 
     let keys = mod1 ANY.keys
-    let vals = mod1 ANY.keys
+    let vals = mod1 ANY.vals
+    let rkeys = mod1 <| ANY.rKV false false
+    let rvals = mod1 <| ANY.rKV true false
+    let wkeys = mod1 <| ANY.rKV false true
+    let wvals = mod1 <| ANY.rKV true true
 
     let len = mod1 (ANY.len >> ANY.fromI)
     let dep = mod1 (ANY.dep >> ANY.fromI)
@@ -404,8 +412,17 @@ module LIB =
 
     let nstd = push (STR "L15") >> nform
 
-    let Lnot' = mod1 ANY.not'
     let Lnot = mod1 <| ANY.vec1 ANY.not'
+    let Lnot' = mod1 ANY.not'
+
+    let eq =
+        mod2
+        <| ANY.vec2 (fun x y -> ANY.eq x y |> ANY.fromBOOL)
+
+    let eq' = mod2 <| fun x y -> ANY.eq x y |> ANY.fromBOOL
+
+    let neq = eq >> Lnot
+    let neq' = eq' >> Lnot'
 
     let gln env =
         mod1
@@ -492,6 +509,20 @@ module LIB =
 
     let Lmap env =
         mod2 (fun x f -> ANY.vec1 (fun f -> ANY.map (eval1 env f) x) f) env
+
+    let Lzip env =
+        mod3
+            (fun x y f ->
+                ANY.vec1
+                    (fun f ->
+                        try ANY.sZip (eval2 env f) x y
+                        with
+                        | ERR_zip (a, b) -> ANY.mkE env ERR_ZIP (a, b)
+                        | e -> raise e) f)
+            env
+
+    let tbl env =
+        mod3 (fun x y f -> ANY.vec1 (fun f -> ANY.table (eval2 env f) x y) f) env
 
     let Lfold env =
         mod3 (fun x a f -> ANY.vec1 (fun f -> ANY.fold (eval2 env f) a x) f) env
@@ -584,8 +615,10 @@ module LIB =
                "|", TODO
                "||", TODO
                "|`", TODO
-               "=", TODO
-               "!=", TODO
+               "=", eq
+               "=`", eq'
+               "!=", neq
+               "!=`", neq'
                "<", TODO
                ">", TODO
                "<=", TODO
@@ -625,15 +658,18 @@ module LIB =
                ">kv", enum'
                ">k", keys
                ">v", vals
+               "r>k", rkeys
+               "r>v", rvals
+               "w>k", wkeys
+               "w>v", wvals
                "len", len
                "dep", dep
                "tk", TODO
                "dp", TODO
 
                "map", Lmap
-               "zip", TODO
-               "zipg", TODO
-               "tbl", TODO
+               "zip", Lzip
+               "tbl", tbl
                "fold", Lfold
                "foldr", TODO
                "scan", TODO
