@@ -64,7 +64,7 @@ type ENV =
       IMPL: bool }
 
 exception ERR_PARSE of string
-exception ERR_ST_LEN of PATH * int
+exception ERR_ST_LEN of PATH * string
 exception ERR_UNK_FN of PATH * string
 exception ERR_CAST of PATH * (ANY * string)
 exception ERR_cast of ANY * string

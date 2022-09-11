@@ -291,6 +291,8 @@ let scan f a t =
         |> MAP
     | _ -> f a t
 
+let unfold f = Seq.unfold f >> SEQ
+
 let dep t =
     match t with
     | Itr _ -> 1 + fold (fun a b -> max a <| dep b) 0 t

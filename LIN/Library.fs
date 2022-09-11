@@ -61,7 +61,7 @@ module HELP =
     let errStr e =
         match e with
         | ERR_PARSE x -> $"bad syntax \"{x}\""
-        | ERR_ST_LEN ((f, l), x) -> $"stack length < {x} @ {f}:{l}"
+        | ERR_ST_LEN ((f, l), x) -> $"stack length {x} @ {f}:{l}"
         | ERR_UNK_FN ((f, l), x) -> $"""unknown fn "{x}" @ {f}:{l}"""
         | ERR_MATCH ((f, l), (x, y)) -> $"no match {ANY.toForm x} -> {ANY.toForm y} @ {f}:{l}"
         | ERR_CAST ((f, l), (x, y)) -> $"bad cast {ANY.toForm x} -> {y} @ {f}:{l}"
@@ -87,7 +87,7 @@ module HELP =
     let arg1 env f =
         match env.stack with
         | C (xs, x) -> f x <| stk env xs
-        | _ -> ANY.mkE env ERR_ST_LEN 1
+        | _ -> ANY.mkE env ERR_ST_LEN "< 1"
 
     let mod1 f env = arg1 env <| (f >> push)
     let mod1s f env = arg1 env <| (f >> pushs)
@@ -95,7 +95,7 @@ module HELP =
     let arg2 env f =
         match env.stack with
         | C (C (xs, x), y) -> f x y <| stk env xs
-        | _ -> ANY.mkE env ERR_ST_LEN 2
+        | _ -> ANY.mkE env ERR_ST_LEN "< 2"
 
     let mod2 f env = arg2 env <| fun x -> f x >> push
     let mod2s f env = arg2 env <| fun x -> f x >> pushs
@@ -103,7 +103,7 @@ module HELP =
     let arg3 env f =
         match env.stack with
         | C (C (C (xs, x), y), z) -> f x y z <| stk env xs
-        | _ -> ANY.mkE env ERR_ST_LEN 3
+        | _ -> ANY.mkE env ERR_ST_LEN "< 3"
 
     let mod3 f env = arg3 env <| fun x y -> f x y >> push
     let mod3s f env = arg3 env <| fun x y -> f x y >> pushs
@@ -529,6 +529,42 @@ module LIB =
     let Lfold env =
         mod3 (fun x a f -> ANY.vec1 (fun f -> ANY.fold (eval2 env f) a x) f) env
 
+    let iterate env =
+        mod2
+            (fun a f ->
+                ANY.vec1
+                    (fun f ->
+                        ANY.unfold
+                            (fun s ->
+                                let st = evalr (PVec.ofSeq [ s ] |> stk env) f
+
+                                match PVec.tryLast st with
+                                | None -> None
+                                | Some m ->
+                                    Some(s, m))
+                            a)
+                    f)
+            env
+
+    let unfold env =
+        mod2
+            (fun a f ->
+                ANY.vec1
+                    (fun f ->
+                        ANY.unfold
+                            (fun s ->
+                                let st = evalr (PVec.ofSeq [ s ] |> stk env) f
+
+                                match PVec.tryUnconj st with
+                                | None -> None
+                                | Some (st, n) ->
+                                    match PVec.tryLast st with
+                                    | None -> ANY.mkE env ERR_ST_LEN "= 1"
+                                    | Some m -> Some(m, n))
+                            a)
+                    f)
+            env
+
     let Lscan env =
         mod3 (fun x a f -> ANY.vec1 (fun f -> ANY.scan (eval2 env f) a x) f) env
 
@@ -678,6 +714,8 @@ module LIB =
                "fold", Lfold
                "scan", Lscan
                "fltr", fltr
+               "find", TODO
+               "ifind", TODO
 
                "rmap", rmap
                "dmap", dmap
@@ -687,12 +725,15 @@ module LIB =
                "}", endMAP
 
                "]`", endSEQ
+               "itr", iterate
+               "fold_", unfold
 
                "UN", UN() |> push
                "OO", NUM infinity |> push
                "$L", gcurl
                "$F", gcurf
                "$R", rng
+               "$`", Seq.initInfinite ANY.fromI |> SEQ |> push
                "()", emptyFN
                "[]", emptyARR
 
