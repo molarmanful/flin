@@ -340,6 +340,10 @@ module LIB =
 
     let len = mod1 (ANY.len >> ANY.fromI)
     let dep = mod1 (ANY.dep >> ANY.fromI)
+    let isEmpty = mod1 (ANY.isEmpty >> ANY.fromBOOL)
+
+    let tk = mod2 <| flip ANY.tk
+    let dp = mod2 <| flip ANY.dp
 
     let es env = arg1 env <| flip eval
 
@@ -698,8 +702,7 @@ module LIB =
                "w>v", wvals
                "len", len
                "dep", dep
-               "tk", TODO
-               "dp", TODO
+               "[]?", isEmpty
 
                "map", Lmap
                "zip", Lzip
@@ -717,7 +720,8 @@ module LIB =
                "{", startARR
                "}", endMAP
 
-               "]`", endSEQ
+               "tk", tk
+               "dp", dp
                "itr", iterate
                "fold_", unfold
 

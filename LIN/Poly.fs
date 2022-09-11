@@ -178,8 +178,7 @@ let fromN n = string n |> BR.Parse |> NUM
 
 let fromNaN n =
     match n with
-    | NUM x when x = nan ->
-        UN()
+    | NUM x when x = nan -> UN()
     | _ -> n
 
 let not' t =
@@ -232,20 +231,26 @@ let (|Equiv|_|) (t, s) =
     else
         None
 
+let isIn i t =
+    let i = unNUM i
+    i > 0 && i < len t
+
 let get i t =
-    let isIn i = unNUM i < len t
+    let g i t =
+        match t with
+        | ARR x when isIn i t -> x[toI i]
+        | SEQ x when isIn i t -> Seq.item (toI i) x
+        | STR x when isIn i t -> x[toI i] |> string |> STR
+        | MAP x when x.ContainsKey i -> x[i]
+        | FN _ -> toSEQ t |> get i
+        | CMD _ -> toSTR t |> get i
+        | _ -> UN()
 
     match t with
     | ARR _
     | SEQ _
-    | STR _ when unNUM i < 0 -> get (NUM(unNUM i </ mod' /> BR(len t))) t
-    | ARR x when isIn i -> x[toI i]
-    | SEQ x when isIn i -> Seq.item (toI i) x
-    | STR x when isIn i -> x[toI i] |> string |> STR
-    | MAP x when x.ContainsKey i -> x[i]
-    | FN _ -> toSEQ t |> get i
-    | CMD _ -> toSTR t |> get i
-    | _ -> UN()
+    | STR _ when unNUM i < 0 -> g (fromI (toI i + len t)) t
+    | _ -> g i t
 
 let mapi f t =
     let f' = fromI >> f
@@ -329,16 +334,16 @@ let rmap f t =
 
 let dmap f d t =
     let rec m f i t d =
-        if d < 0 then
-            m f i t (d </ mod' /> dep t)
-        elif d = 0 then
+        if d <= 0 then
             f i t
         else
             match t with
             | Itr _ -> mapi (fun j x -> m f (Lplus'' i j) x (d - 1)) t
             | _ -> f i t
 
-    if d = 0 then
+    if d < 0 then
+        m f (lARR []) t (d + dep t)
+    elif d = 0 then
         rmap f t
     else
         m f (lARR []) t d
@@ -398,6 +403,62 @@ let table f t s =
     | Itr _, _ -> map (flip f s) t
     | _, Itr _ -> map (f t) s
     | _ -> f t s
+
+let isEmpty t =
+    match t with
+    | SEQ x -> Seq.isEmpty x
+    | ARR x -> RVec.isEmpty x
+    | MAP x -> x = PMap.empty
+    | STR x -> x = ""
+    | FN (_, x) -> Seq.isEmpty x
+    | UN _ -> true
+    | _ -> false
+
+let tk_ n t =
+    match t with
+    | SEQ x -> Seq.truncate (toI n) x |> SEQ
+    | ARR x -> RVec.truncate (toI n) x |> ARR
+    | _ -> toSEQ t |> tk_ n
+
+let dp_ n t =
+    match t with
+    | SEQ x ->
+        let rec d n xs =
+            if Seq.isEmpty xs || n <= 0 then
+                xs
+            else
+                d (n - 1) (Seq.tail xs)
+
+        d (toI n) x |> SEQ
+    | ARR x ->
+        let rec d n xs =
+            if RVec.isEmpty xs || n <= 0 then
+                xs
+            else
+                d (n - 1) (RVec.tail xs)
+
+        d (toI n) x |> ARR
+    | _ -> toSEQ t |> dp_ n
+
+let tk n t =
+    n
+    |> vec1 (fun x ->
+        let y = toI x
+
+        if y < 0 then
+            dp_ (fromI (y + len t)) t
+        else
+            tk_ x t)
+
+let dp n t =
+    n
+    |> vec1 (fun x ->
+        let y = toI x
+
+        if y < 0 then
+            tk_ (fromI (y + len t)) t
+        else
+            dp_ x t)
 
 let vec1 f t =
     match t with
