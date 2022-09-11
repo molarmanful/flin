@@ -530,40 +530,33 @@ module LIB =
         mod3 (fun x a f -> ANY.vec1 (fun f -> ANY.fold (eval2 env f) a x) f) env
 
     let iterate env =
-        mod2
-            (fun a f ->
-                ANY.vec1
-                    (fun f ->
-                        ANY.unfold
-                            (fun s ->
-                                let st = evalr (PVec.ofSeq [ s ] |> stk env) f
+        env
+        |> mod2 (fun a f ->
+            f
+            |> ANY.vec1 (fun f ->
+                a
+                |> ANY.unfold (fun s ->
+                    let st = evalr (PVec.ofSeq [ s ] |> stk env) f
 
-                                match PVec.tryLast st with
-                                | None -> None
-                                | Some m ->
-                                    Some(s, m))
-                            a)
-                    f)
-            env
+                    match PVec.tryLast st with
+                    | None -> None
+                    | Some m -> Some(s, m))))
 
     let unfold env =
-        mod2
-            (fun a f ->
-                ANY.vec1
-                    (fun f ->
-                        ANY.unfold
-                            (fun s ->
-                                let st = evalr (PVec.ofSeq [ s ] |> stk env) f
+        env
+        |> mod2 (fun a f ->
+            f
+            |> ANY.vec1 (fun f ->
+                a
+                |> ANY.unfold (fun s ->
+                    let st = evalr (PVec.ofSeq [ s ] |> stk env) f
 
-                                match PVec.tryUnconj st with
-                                | None -> None
-                                | Some (st, n) ->
-                                    match PVec.tryLast st with
-                                    | None -> ANY.mkE env ERR_ST_LEN "= 1"
-                                    | Some m -> Some(m, n))
-                            a)
-                    f)
-            env
+                    match PVec.tryUnconj st with
+                    | None -> None
+                    | Some (st, n) ->
+                        match PVec.tryLast st with
+                        | None -> ANY.mkE env ERR_ST_LEN "= 1"
+                        | Some m -> Some(m, n))))
 
     let Lscan env =
         mod3 (fun x a f -> ANY.vec1 (fun f -> ANY.scan (eval2 env f) a x) f) env
