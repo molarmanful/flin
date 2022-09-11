@@ -178,7 +178,8 @@ let fromN n = string n |> BR.Parse |> NUM
 
 let fromNaN n =
     match n with
-    | NUM x when BR.IsNaN x -> UN()
+    | NUM x when x = nan ->
+        UN()
     | _ -> n
 
 let not' t =
