@@ -231,17 +231,15 @@ let (|Equiv|_|) (t, s) =
     else
         None
 
-let isIn i t =
-    let i = unNUM i
-    i > 0 && i < len t
-
 let get i t =
     let g i t =
         match t with
-        | ARR x when isIn i t -> x[toI i]
-        | SEQ x when isIn i t -> Seq.item (toI i) x
-        | STR x when isIn i t -> x[toI i] |> string |> STR
-        | MAP x when x.ContainsKey i -> x[i]
+        | SEQ x -> Seq.tryItem (toI i) x |> odef
+        | ARR x -> RVec.tryItem (toI i) x |> odef
+        | MAP x -> if x.ContainsKey i then x[i] else UN()
+        | STR x ->
+            String.tryItem (toI i) x
+            |> option (string >> STR) (UN())
         | FN _ -> toSEQ t |> get i
         | CMD _ -> toSTR t |> get i
         | _ -> UN()

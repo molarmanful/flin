@@ -342,6 +342,10 @@ module LIB =
     let dep = mod1 (ANY.dep >> ANY.fromI)
     let isEmpty = mod1 (ANY.isEmpty >> ANY.fromBOOL)
 
+    let Lget =
+        mod2
+        <| fun x y -> ANY.vec1 (fun a -> ANY.get a x) y
+
     let tk = mod2 <| flip ANY.tk
     let dp = mod2 <| flip ANY.dp
 
@@ -683,8 +687,8 @@ module LIB =
                "g;;", gprev
                "g@@", gln
                "g@~", grel
-               "$", eStArr
                "'", eArrSt
+               "'_", eStArr
 
                "[", startARR
                "]", endARR
@@ -703,6 +707,7 @@ module LIB =
                "len", len
                "dep", dep
                "[]?", isEmpty
+               "$", Lget
 
                "map", Lmap
                "zip", Lzip
