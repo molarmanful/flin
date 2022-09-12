@@ -345,7 +345,7 @@ module LIB =
     let Lget =
         mod2
         <| fun x y -> ANY.vec1 (fun a -> ANY.get a x) y
-    
+
     let Lget' = mod2 <| flip ANY.get
 
     let tk = mod2 <| flip ANY.tk
@@ -468,7 +468,9 @@ module LIB =
 
     let eArrSt env =
         arg1 env
-        <| fun x -> unwrap' >> flip evale x >> wrap''
+        <| fun x env ->
+            let { stack = st } = unwrap' env |> flip evale x |> wrap''
+            pop env |> push (PVec.last st)
 
     let rng env =
         env.rng.NextFullRangeInt64()
