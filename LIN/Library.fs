@@ -467,10 +467,13 @@ module LIB =
         <| fun x -> wrap'' >> push x >> quar >> unwrap'
 
     let eArrSt env =
-        arg1 env
-        <| fun x env ->
-            let { stack = st } = unwrap' env |> flip evale x |> wrap''
-            pop env |> push (PVec.last st)
+        arg2 env
+        <| fun x f env ->
+            push x env
+            |> unwrap'
+            |> flip evalr f
+            |> ANY.fromStack
+            |> push' env
 
     let rng env =
         env.rng.NextFullRangeInt64()
