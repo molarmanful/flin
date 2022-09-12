@@ -345,6 +345,8 @@ module LIB =
     let Lget =
         mod2
         <| fun x y -> ANY.vec1 (fun a -> ANY.get a x) y
+    
+    let Lget' = mod2 <| flip ANY.get
 
     let tk = mod2 <| flip ANY.tk
     let dp = mod2 <| flip ANY.dp
@@ -595,9 +597,9 @@ module LIB =
                ">?", Lun
                "form", form
 
-               ":", getS
-               "=:", setS
-               ">:", modS
+               "$", getS
+               "=$", setS
+               ">$", modS
 
                "I>", inp
                "I>_", inh
@@ -707,7 +709,8 @@ module LIB =
                "len", len
                "dep", dep
                "[]?", isEmpty
-               "$", Lget
+               ":", Lget
+               ":`", Lget'
 
                "map", Lmap
                "zip", Lzip
@@ -735,7 +738,7 @@ module LIB =
                "$L", gcurl
                "$F", gcurf
                "$R", rng
-               "$`", Seq.initInfinite ANY.fromI |> SEQ |> push
+               "$W", Seq.initInfinite ANY.fromI |> SEQ |> push
                "()", emptyFN
                "[]", emptyARR
 
