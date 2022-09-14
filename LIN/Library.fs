@@ -466,6 +466,13 @@ module LIB =
     let neq = eq >> Lnot
     let neq' = eq' >> Lnot'
 
+    let Lsplit = mod2 ANY.split
+    let Ljoin = mod2 ANY.join
+
+    let ssplit =
+        push (Seq.map STR [ " "; "\r\n"; "\n"; "\t" ] |> SEQ)
+        >> Lsplit
+
     let gln env = mod1 (ANY.vec1 <| flip gline env) env
     let eln env = arg1 env <| fun x -> ANY.toI x |> eline
 
@@ -698,6 +705,18 @@ module LIB =
                ">=", TODO
                "<=>", TODO
 
+               "S>c", TODO
+               "c>S", TODO
+               "<>", Lsplit
+               "><", Ljoin
+               "c<>", push (STR "") >> Lsplit
+               "c><", push (STR "") >> Ljoin
+               "w<>", push (STR " ") >> Lsplit
+               "w><", push (STR " ") >> Ljoin
+               "n<>", push (STR "\n") >> Lsplit
+               "n><", push (STR "\n") >> Ljoin
+               "s<>", ssplit
+
                "(", startFN
                ")", id // TODO:?
                "\\", wrFN
@@ -770,6 +789,8 @@ module LIB =
                "UN", UN() |> push
                "OO", NUM infinity |> push
                "OO_", NUM -infinity |> push
+               "$n", STR "\n" |> push
+               "$t", STR "\t" |> push
                "$L", gcurl
                "$F", gcurf
                "$R", rng

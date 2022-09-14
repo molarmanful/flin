@@ -1,0 +1,2 @@
+101i>b \; map n>< n>O
+  "Fizz""Buzz", over 3 5, % ! *` c>< dup \pop |#

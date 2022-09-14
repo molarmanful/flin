@@ -600,4 +600,20 @@ let range x y =
         |> Seq.map NUM
         |> SEQ)
 
+let split t s =
+    string t
+    |> String.split (unSEQ s |> Seq.map string)
+    |> Seq.map STR
+    |> SEQ
+
+let join t s =
+    let t = unSEQ t
+
+    s
+    |> vec1 (fun x ->
+        Seq.map string t
+        |> String.intercalate (string x)
+        |> STR)
+
+
 let odef = Option.defaultValue <| UN()
