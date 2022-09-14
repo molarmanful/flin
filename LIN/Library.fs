@@ -20,7 +20,7 @@ let (|C|Nil|) = PVec.(|Conj|Nil|)
 
 [<AutoOpen>]
 module HELP =
-    let TODO x = failwith "TODO"
+    let TODO _ = failwith "TODO"
 
     let lines = String.split [ "\n"; "\r\n" ]
 
@@ -126,11 +126,12 @@ module HELP =
                 |> fun env1 -> stk env env1.stack
         | NUM _ -> push s env
         | ANY.Itr _ ->
-            ANY.map
-                (evale env
-                 >> exec
-                 >> fun env1 -> RVec.ofSeq env1.stack |> ARR)
-                s
+            s
+            |> ANY.map (
+                evale env
+                >> exec
+                >> fun env1 -> RVec.ofSeq env1.stack |> ARR
+            )
             |> push' env
         | _ -> ANY.toFN env s |> eval env
 
@@ -145,31 +146,63 @@ module HELP =
     let eval2 env f x y = evals env f [ x; y ]
     let eval3 env f x y z = evals env f [ x; y; z ]
 
-    let pline env i =
+    let pline i env =
         let (f, _), _ = env.code
+        let p = (f, i)
 
-        { env with
-            lines =
-                if PMap.containsKey (f, i) env.lines then
-                    let s = env.lines[f, i]
+        if PMap.containsKey p env.lines then
+            let s = env.lines[p]
 
-                    PMap.add
-                        (f, i)
-                        (match s with
-                         | STR _ -> ANY.iFN env i s
-                         | _ -> s)
-                        env.lines
-                else
-                    env.lines }
+            let s =
+                match s with
+                | STR _ -> ANY.iFN env i s
+                | _ -> s
 
-    let eline env i =
-        let (f, _), _ = env.code
-
-        if PMap.containsKey (f, i) env.lines then
-            let env = pline env i
-            eval env env.lines[f, i]
+            { env with lines = PMap.add p s env.lines }
         else
             env
+
+    let gline i env =
+        let (f, _), _ = env.code
+        ANY.mget (f, ANY.toI i) env.lines
+
+    let eline i env =
+        let (f, _), _ = env.code
+        let p = (f, i)
+
+        if PMap.containsKey p env.lines then
+            let env = pline i env
+            eval env env.lines[p]
+        else
+            env
+
+    let pID k fn env =
+        if PMap.containsKey k env.ids then
+            env
+        else
+            let ((_, l), x) =
+                env.lines
+                |> Seq.tryFind (fun ((f, _), x) ->
+                    fst env.code |> fst = f
+                    && string x
+                       |> String.trimStartWhiteSpaces
+                       |> String.startsWith $"#{k}")
+                |> Option.defaultValue (("", -1), UN())
+
+            let x =
+                if ANY.isUN x then
+                    x
+                else
+                    (string x |> String.trimStartWhiteSpaces)
+                        .Remove(0, 1 + length k)
+                    |> STR
+                    |> if fn then ANY.iFN env l else id
+
+            { env with ids = PMap.add k x env.ids }
+
+    let gID k env = (pID k false env).ids[k]
+    let hID k env = (pID k true env).ids[k]
+    let eID k env = hID k env |> eval env
 
     let wrapFN y (FN (p, cs)) =
         let w = y = CMD ""
@@ -263,7 +296,7 @@ module LIB =
                 let c =
                     tryLast res
                     |> Option.defaultValue (CMD ")")
-                    |> fun (CMD n) -> n
+                    |> string
                     |> String.split [ ")" ]
                     |> rev
                     |> head
@@ -385,27 +418,25 @@ module LIB =
     let Lfn env = mod1 (ANY.toFN env) env
 
     let Lnum env =
-        mod1
-            (fun x ->
-                try
-                    ANY.toNUM x
-                with
-                | ERR_cast (a, b) -> ANY.mkE env ERR_CAST (a, b)
-                | e -> raise e)
-            env
+        env
+        |> mod1 (fun x ->
+            try
+                ANY.toNUM x
+            with
+            | ERR_cast (a, b) -> ANY.mkE env ERR_CAST (a, b)
+            | e -> raise e)
 
     let Lseq = mod1 ANY.toSEQ
     let Larr = mod1 ANY.toARR
 
     let LMap env =
-        mod1
-            (fun x ->
-                try
-                    ANY.toMAP x
-                with
-                | ERR_cast (a, b) -> ANY.mkE env ERR_CAST (a, b)
-                | e -> raise e)
-            env
+        env
+        |> mod1 (fun x ->
+            try
+                ANY.toMAP x
+            with
+            | ERR_cast (a, b) -> ANY.mkE env ERR_CAST (a, b)
+            | e -> raise e)
 
     let Lbool = mod1 ANY.tru
 
@@ -434,16 +465,8 @@ module LIB =
     let neq = eq >> Lnot
     let neq' = eq' >> Lnot'
 
-    let gln env =
-        mod1
-            (ANY.vec1
-             <| fun x ->
-                 let (f, _), _ = env.code
-                 env.lines[f, ANY.toI x])
-            env
-
-    let eln env =
-        arg1 env <| fun x env -> ANY.toI x |> eline env
+    let gln env = mod1 (ANY.vec1 <| flip gline env) env
+    let eln env = arg1 env <| fun x -> ANY.toI x |> eline
 
     let gcurl env =
         let (_, l), _ = env.code
@@ -481,37 +504,37 @@ module LIB =
         |> push' env
 
     let getS env =
-        mod1
-            (ANY.vec1
-             <| fun x ->
-                 let x = ANY.toVar x
+        env
+        |> mod1 (
+            ANY.vec1
+            <| fun x ->
+                let x = ANY.toVar x
 
-                 if env.scope.ContainsKey x then
-                     env.scope[x]
-                 else
-                     UN())
-            env
+                if PMap.containsKey x env.scope then
+                    ANY.mget x env.scope
+                else
+                    gID (string x) env
+        )
 
     let setS env =
         arg2 env
         <| fun x y env ->
-            ANY.vef1
-                (fun e a ->
-                    let a = ANY.toVar a
-                    { e with scope = e.scope.Add(a, x) })
-                env
-                y
+            (env, y)
+            ||> ANY.vef1 (fun e a ->
+                let a = ANY.toVar a
+                { e with scope = e.scope.Add(a, x) })
 
     let modS env =
         arg2 env
         <| fun x y env ->
-            ANY.vef1
-                (fun e a ->
-                    let a = ANY.toVar a
-                    let res = push a e |> getS |> flip evalq x
-                    { e with scope = e.scope.Add(a, res) })
-                env
-                y
+            (env, y)
+            ||> ANY.vef1 (fun e a ->
+                let a = ANY.toVar a
+                let res = push a e |> getS |> flip evalq x
+                { e with scope = e.scope.Add(a, res) })
+
+    let getI env =
+        arg1 env <| fun x -> pID (string x) true
 
     let dot env =
         match snd env.code with
@@ -526,17 +549,15 @@ module LIB =
         mod2 (fun x f -> ANY.vec1 (fun f -> ANY.map (eval1 env f) x) f) env
 
     let Lzip env =
-        mod3
-            (fun x y f ->
-                ANY.vec1
-                    (fun f ->
-                        try
-                            ANY.sZip (eval2 env f) x y
-                        with
-                        | ERR_zip (a, b) -> ANY.mkE env ERR_ZIP (a, b)
-                        | e -> raise e)
-                    f)
-            env
+        env
+        |> mod3 (fun x y f ->
+            f
+            |> ANY.vec1 (fun f ->
+                try
+                    ANY.sZip (eval2 env f) x y
+                with
+                | ERR_zip (a, b) -> ANY.mkE env ERR_ZIP (a, b)
+                | e -> raise e))
 
     let tbl env =
         mod3 (fun x y f -> ANY.vec1 (fun f -> ANY.table (eval2 env f) x y) f) env
@@ -605,6 +626,7 @@ module LIB =
                "$", getS
                "=$", setS
                ">$", modS
+               "$#", getI
 
                "I>", inp
                "I>_", inh
@@ -771,6 +793,8 @@ let execA c env =
             env
         elif env.scope.ContainsKey <| STR x then
             eval env env.scope[c]
+        elif env.ids.ContainsKey x then
+            eID x env
         elif LIB.SL.ContainsKey x then
             LIB.SL[x](env)
         else
@@ -778,18 +802,17 @@ let execA c env =
     | _ -> push c env
 
 let run (s, v, i) file lines =
-    let env =
-        { stack = PVec.empty
-          code = ((file, 0), [])
-          lines = lines
-          scope = PMap.empty
-          arr = []
-          rng = Random.shared
-          STEP = s
-          VERB = v
-          IMPL = i }
-
-    eline env 0
+    { stack = PVec.empty
+      code = ((file, 0), [])
+      lines = lines
+      scope = PMap.empty
+      ids = PMap.empty
+      arr = []
+      rng = Random.shared
+      STEP = s
+      VERB = v
+      IMPL = i }
+    |> eline 0
     |> exec
     |> tap (fun env ->
         if env.STEP || env.IMPL then

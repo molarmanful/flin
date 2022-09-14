@@ -46,7 +46,9 @@ let toForm a =
     | FN ((_, l), x) ->
         let n =
             string l
-            |> String.map (fun d -> "⁰¹²³⁴⁵⁶⁷⁸⁹"[int d - 48])
+            |> String.map (fun d ->
+                String.tryItem (int d - int '0') "⁰¹²³⁴⁵⁶⁷⁸⁹"
+                |> Option.defaultValue d)
 
         List.map toForm x
         |> String.intercalate " "
@@ -250,6 +252,12 @@ let get i t =
     | STR _ when unNUM i < 0 -> g (fromI (toI i + len t)) t
     | _ -> g i t
 
+let mget i t =
+    if PMap.containsKey i t then
+        t[i]
+    else
+        UN()
+
 let mapi f t =
     let f' = fromI >> f
 
@@ -401,6 +409,11 @@ let table f t s =
     | Itr _, _ -> map (flip f s) t
     | _, Itr _ -> map (f t) s
     | _ -> f t s
+
+let isUN t =
+    match t with
+    | UN _ -> true
+    | _ -> false
 
 let isEmpty t =
     match t with

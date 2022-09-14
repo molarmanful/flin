@@ -57,6 +57,7 @@ type ENV =
       code: FN
       lines: PMap<PATH, ANY>
       scope: PMap<ANY, ANY>
+      ids: PMap<string, ANY>
       arr: PVec<ANY> list
       rng: System.Random
       STEP: bool
