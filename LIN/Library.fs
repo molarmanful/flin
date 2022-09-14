@@ -387,6 +387,8 @@ module LIB =
     let range = mod2 <| ANY.range
     let orang = push (NUM 0) >> range
     let rango = push (NUM 0) >> swap >> range
+    let irang = push (NUM 1) >> range
+    let rangi = push (NUM 1) >> swap >> range
 
     let es env = arg1 env <| flip eval
 
@@ -766,6 +768,8 @@ module LIB =
                "a>b", range
                "o>b", rango
                "a>o", orang
+               "i>b", rangi
+               "a>i", irang
 
                "UN", UN() |> push
                "OO", NUM infinity |> push
