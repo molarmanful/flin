@@ -177,32 +177,27 @@ module HELP =
             env
 
     let pID k fn env =
-        if PMap.containsKey k env.ids then
-            env
-        else
-            let ((_, l), x) =
-                env.lines
-                |> Seq.tryFind (fun ((f, _), x) ->
-                    fst env.code |> fst = f
-                    && string x
-                       |> String.trimStartWhiteSpaces
-                       |> String.startsWith $"#{k}")
-                |> Option.defaultValue (("", -1), UN())
+        let ((_, l), x) =
+            env.lines
+            |> Seq.tryFind (fun ((f, _), x) ->
+                fst env.code |> fst = f
+                && string x
+                   |> String.trimStartWhiteSpaces
+                   |> String.startsWith $"#{k}")
+            |> Option.defaultValue (("", -1), UN())
 
-            let x =
-                if ANY.isUN x then
-                    x
-                else
-                    (string x |> String.trimStartWhiteSpaces)
-                        .Remove(0, 1 + length k)
-                    |> STR
-                    |> if fn then ANY.iFN env l else id
+        let x =
+            if ANY.isUN x then
+                x
+            else
+                (string x |> String.trimStartWhiteSpaces)
+                    .Remove(0, 1 + length k)
+                |> STR
+                |> if fn then ANY.iFN env l else id
 
-            { env with ids = PMap.add k x env.ids }
+        { env with scope = PMap.add (STR k) x env.scope }
 
-    let gID k env = (pID k false env).ids[k]
-    let hID k env = (pID k true env).ids[k]
-    let eID k env = hID k env |> eval env
+    let gID k env = (pID (string k) false env).scope[k]
 
     let wrapFN y (FN (p, cs)) =
         let w = y = CMD ""
@@ -519,7 +514,7 @@ module LIB =
                 if PMap.containsKey x env.scope then
                     ANY.mget x env.scope
                 else
-                    gID (string x) env
+                    gID x env
         )
 
     let setS env =
@@ -540,7 +535,8 @@ module LIB =
                 { e with scope = e.scope.Add(a, res) })
 
     let getI env =
-        arg1 env <| fun x -> pID (string x) true
+        arg1 env
+        <| flip (ANY.vef1 <| fun a b -> pID (string b) true a)
 
     let dot env =
         match snd env.code with
@@ -632,7 +628,7 @@ module LIB =
                "$", getS
                "=$", setS
                ">$", modS
-               "$#", getI
+               ":#", getI
 
                "I>", inp
                "I>_", inh
@@ -804,9 +800,7 @@ let execA c env =
         elif x.StartsWith '#' && x.Length > 1 then
             env
         elif env.scope.ContainsKey <| STR x then
-            eval env env.scope[c]
-        elif env.ids.ContainsKey x then
-            eID x env
+            eval env env.scope[STR x]
         elif LIB.SL.ContainsKey x then
             LIB.SL[x](env)
         else
@@ -818,7 +812,6 @@ let run (s, v, i) file lines =
       code = ((file, 0), [])
       lines = lines
       scope = PMap.empty
-      ids = PMap.empty
       arr = []
       rng = Random.shared
       STEP = s
