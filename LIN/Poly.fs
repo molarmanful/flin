@@ -560,15 +560,14 @@ let Lmul'' t s =
 
     match t, s with
     | Itr _, Itr _ ->
-        mapi
-            (fun i y ->
-                SEQ(
-                    match get i t, y with
-                    | UN _, _ -> Seq.empty
-                    | Itr x, Itr _ -> Lmul'' x y |> Seq.singleton
-                    | x, _ -> rep y x
-                ))
-            s
+        s
+        |> mapi (fun i y ->
+            SEQ(
+                match get i t, y with
+                | UN _, _ -> Seq.empty
+                | Itr x, Itr _ -> Lmul'' x y |> Seq.singleton
+                | x, _ -> rep y x
+            ))
         |> flat
     | ARR _, _ -> arep s t |> ARR |> flat
     | _ -> rep s t |> SEQ |> flat
@@ -585,5 +584,20 @@ let trunc = num1 BR.Truncate
 let floor = num1 BR.Floor
 let round = num1 BR.Round
 let ceil = num1 BR.Ceiling
+
+let range x y =
+    (x, y)
+    ||> vec2 (fun x y ->
+        let x = unNUM x
+        let y = unNUM y
+
+        x
+        |> Seq.unfold (fun s ->
+            if s <> y then
+                Some(s, (if x > y then (-) else (+)) s (BR 1))
+            else
+                None)
+        |> Seq.map NUM
+        |> SEQ)
 
 let odef = Option.defaultValue <| UN()

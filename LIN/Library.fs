@@ -384,6 +384,10 @@ module LIB =
     let tk = mod2 <| flip ANY.tk
     let dp = mod2 <| flip ANY.dp
 
+    let range = mod2 <| ANY.range
+    let orang = push (NUM 0) >> range
+    let rango = push (NUM 0) >> swap >> range
+
     let es env = arg1 env <| flip eval
 
     let eand env =
@@ -759,9 +763,13 @@ module LIB =
                "dp", dp
                "itr", iterate
                "fold_", unfold
+               "a>b", range
+               "o>b", rango
+               "a>o", orang
 
                "UN", UN() |> push
                "OO", NUM infinity |> push
+               "OO_", NUM -infinity |> push
                "$L", gcurl
                "$F", gcurf
                "$R", rng
