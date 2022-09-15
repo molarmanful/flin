@@ -585,31 +585,22 @@ let Lmul = num2 (*)
 let Lmul' = strnum2 <| fun x y -> String.replicate (int y) x
 
 let Lmul'' t s =
+    let rep = toI >> Seq.replicate
+    let arep = toI >> RVec.replicate
+
     match t, s with
-    | SEQ _, _ ->
+    | Itr _, Itr _ ->
         s
-        |> vec1 (fun n ->
-            let rec r n t =
-                seq {
-                    if n > BR 0 then
-                        yield! unSEQ t
-                        yield! r (n - BR 1) t
-                }
-
-            r (unNUM n) t |> SEQ)
-    | ARR _, _ -> Lmul'' (toSEQ t) s |> toARR
-    | FN (p, x), _ ->
-        s
-        |> vec1 (fun n ->
-            let rec r n t =
-                [ if n > BR 0 then
-                      yield! x
-                      yield! r (n - BR 1) t ]
-
-            FN(p, r (unNUM n) t))
-    | _ ->
-        s
-        |> vec1 (fun n -> Seq.replicate (toI n) t |> SEQ)
+        |> mapi (fun i y ->
+            SEQ(
+                match get i t, y with
+                | UN _, _ -> Seq.empty
+                | Itr x, Itr _ -> Lmul'' x y |> Seq.singleton
+                | x, _ -> rep y x
+            ))
+        |> flat
+    | ARR _, _ -> arep s t |> ARR |> flat
+    | _ -> rep s t |> SEQ |> flat
 
 let Ldiv t = num2 (/) t
 
