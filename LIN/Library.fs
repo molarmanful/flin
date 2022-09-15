@@ -376,8 +376,6 @@ module LIB =
 
     let Lget' = mod2 <| flip ANY.get
 
-    let cache = mod1 (ANY.unSEQ >> Seq.cache >> SEQ)
-
     let tk = mod2 <| flip ANY.tk
     let dp = mod2 <| flip ANY.dp
 
@@ -609,6 +607,8 @@ module LIB =
                         match PVec.tryLast st with
                         | None -> ANY.mkE env ERR_ST_LEN "= 1"
                         | Some m -> Some(m, n))))
+    
+    let cyc = mod1 ANY.cyc
 
     let Lscan env =
         mod3 (fun x a f -> ANY.vec1 (fun f -> ANY.scan (eval2 env f) a x) f) env
@@ -799,11 +799,11 @@ module LIB =
                "{", startARR
                "}", endMAP
 
-               ">C", cache
                "tk", tk
                "dp", dp
                "itr", iterate
                "fold_", unfold
+               "cyc", cyc
                "a>b", range
                "o>b", rango
                "a>o", orang
@@ -811,8 +811,6 @@ module LIB =
                "a>i", irang
 
                "UN", UN() |> push
-               "OO", NUM infinity |> push
-               "OO_", NUM -infinity |> push
                "$n", STR "\n" |> push
                "$t", STR "\t" |> push
                "$L", gcurl

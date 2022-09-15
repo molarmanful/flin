@@ -510,11 +510,12 @@ let vef1 f a t =
     | Itr _ -> fold (fun x y -> vef1 f x y) a t
     | _ -> f a t
 
-let num1 f = vec1 (unNUM >> f >> NUM)
+let num1 f = vec1 (unNUM >> f >> NUM >> fromNaN)
 let str1 f = vec1 (unSTR >> f >> STR)
 
 let num2 f =
-    vec2 <| fun t s -> f (unNUM t) (unNUM s) |> NUM
+    vec2
+    <| fun t s -> f (unNUM t) (unNUM s) |> NUM |> fromNaN
 
 let str2 f =
     vec2 <| fun t s -> f (unSTR t) (unSTR s) |> STR
@@ -584,24 +585,33 @@ let Lmul = num2 (*)
 let Lmul' = strnum2 <| fun x y -> String.replicate (int y) x
 
 let Lmul'' t s =
-    let rep = toI >> Seq.replicate
-    let arep = toI >> RVec.replicate
-
     match t, s with
-    | Itr _, Itr _ ->
+    | SEQ _, _ ->
         s
-        |> mapi (fun i y ->
-            SEQ(
-                match get i t, y with
-                | UN _, _ -> Seq.empty
-                | Itr x, Itr _ -> Lmul'' x y |> Seq.singleton
-                | x, _ -> rep y x
-            ))
-        |> flat
-    | ARR _, _ -> arep s t |> ARR |> flat
-    | _ -> rep s t |> SEQ |> flat
+        |> vec1 (fun n ->
+            let rec r n t =
+                seq {
+                    if n > BR 0 then
+                        yield! unSEQ t
+                        yield! r (n - BR 1) t
+                }
 
-let Ldiv t = num2 (/) t >> fromNaN
+            r (unNUM n) t |> SEQ)
+    | ARR _, _ -> Lmul'' (toSEQ t) s |> toARR
+    | FN (p, x), _ ->
+        s
+        |> vec1 (fun n ->
+            let rec r n t =
+                [ if n > BR 0 then
+                      yield! x
+                      yield! r (n - BR 1) t ]
+
+            FN(p, r (unNUM n) t))
+    | _ ->
+        s
+        |> vec1 (fun n -> Seq.replicate (toI n) t |> SEQ)
+
+let Ldiv t = num2 (/) t
 
 let Lmod = num2 mod'
 
@@ -643,5 +653,20 @@ let join t s =
         Seq.map string t
         |> String.intercalate (string x)
         |> STR)
+
+let cyc t =
+    SEQ(
+        match t with
+        | It _ ->
+            seq {
+                while true do
+                    yield! unSEQ t
+            }
+        | _ ->
+            seq {
+                while true do
+                    yield t
+            }
+    )
 
 let odef = Option.defaultValue <| UN()
