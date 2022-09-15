@@ -376,6 +376,8 @@ module LIB =
 
     let Lget' = mod2 <| flip ANY.get
 
+    let cache = mod1 (ANY.unSEQ >> Seq.cache >> SEQ)
+
     let tk = mod2 <| flip ANY.tk
     let dp = mod2 <| flip ANY.dp
 
@@ -465,6 +467,11 @@ module LIB =
 
     let neq = eq >> Lnot
     let neq' = eq' >> Lnot'
+
+    let lt = mod2 ANY.lt
+    let gt = mod2 ANY.gt
+    let lteq = mod2 ANY.lteq
+    let gteq = mod2 ANY.gteq
 
     let Lsplit = mod2 ANY.split
     let Ljoin = mod2 ANY.join
@@ -609,6 +616,18 @@ module LIB =
     let fltr env =
         mod2 (fun x f -> ANY.vec1 (fun f -> ANY.filter (eval1 env f) x) f) env
 
+    let any env =
+        mod2 (fun x f -> ANY.vec1 (fun f -> ANY.any (eval1 env f) x |> ANY.fromBOOL) f) env
+
+    let all env =
+        mod2 (fun x f -> ANY.vec1 (fun f -> ANY.all (eval1 env f) x |> ANY.fromBOOL) f) env
+
+    let tkwl env =
+        mod2 (fun x f -> ANY.vec1 (fun f -> ANY.takeWhile (eval1 env f) x) f) env
+
+    let dpwl env =
+        mod2 (fun x f -> ANY.vec1 (fun f -> ANY.dropWhile (eval1 env f) x) f) env
+
     let rmap env =
         mod2 (fun x f -> ANY.vec1 (fun f -> ANY.rmap (eval2 env f) x) f) env
 
@@ -699,10 +718,10 @@ module LIB =
                "=`", eq'
                "!=", neq
                "!=`", neq'
-               "<", TODO
-               ">", TODO
-               "<=", TODO
-               ">=", TODO
+               "<", lt
+               ">", gt
+               "<=", lteq
+               ">=", gteq
                "<=>", TODO
 
                "S>c", TODO
@@ -766,6 +785,10 @@ module LIB =
                "fold", Lfold
                "scan", Lscan
                "fltr", fltr
+               "any", any
+               "all", all
+               "tk*", tkwl
+               "dp*", dpwl
                "find", TODO
                "ifind", TODO
 
@@ -776,6 +799,7 @@ module LIB =
                "{", startARR
                "}", endMAP
 
+               ">C", cache
                "tk", tk
                "dp", dp
                "itr", iterate

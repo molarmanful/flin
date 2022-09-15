@@ -155,7 +155,8 @@ let unMAP n =
     let (MAP n) = toMAP n
     n
 
-let fromBOOL b = NUM(if b then 1 else 0)
+let fbool b = BR(if b then 1 else 0)
+let fromBOOL = fbool >> NUM
 
 let toBOOL n =
     match n with
@@ -215,23 +216,6 @@ let (|Itr|_|) t =
     | MAP _
     | It _ -> Some t
     | _ -> None
-
-let (|Equiv|_|) (t, s) =
-    if len t = len s
-       && (match t, s with
-           | ARR _, ARR _
-           | SEQ _, SEQ _
-           | ARR _, SEQ _
-           | SEQ _, ARR _ -> true
-           | MAP x, MAP y when
-               len t = len t
-               && Seq.forall (fun (i, _) -> y.ContainsKey i) x
-               ->
-               true
-           | _ -> false) then
-        Some(t, s)
-    else
-        None
 
 let get i t =
     let g i t =
@@ -378,10 +362,47 @@ let filter f t =
         |> MAP
     | _ -> f t |> fromBOOL
 
-let zip f t s =
-    match t, s with
-    | Itr _, Itr _ -> mapi (fun i x -> get i s |> f x) t
-    | _ -> table f t s
+let any f t =
+    let f = f >> toBOOL
+
+    match t with
+    | It _ -> Seq.exists f (unSEQ t)
+    | MAP x -> PMap.toSeq x |> Seq.exists (fun (_, a) -> f a)
+    | _ -> f t
+
+let all f t =
+    let f = f >> toBOOL
+
+    match t with
+    | It _ -> Seq.forall f (unSEQ t)
+    | MAP x -> PMap.toSeq x |> Seq.forall (fun (_, a) -> f a)
+    | _ -> f t
+
+let takeWhile f t =
+    let f = f >> toBOOL
+
+    match t with
+    | SEQ x -> Seq.takeWhile f x |> SEQ
+    | ARR x -> RVec.takeWhile f x |> ARR
+    | MAP x ->
+        PMap.toSeq x
+        |> Seq.takeWhile (fun (_, a) -> f a)
+        |> PMap.ofSeq
+        |> MAP
+    | _ -> f t |> fromBOOL
+
+let dropWhile f t =
+    let f = f >> toBOOL
+
+    match t with
+    | SEQ x -> Seq.skipWhile f x |> SEQ
+    | ARR x -> RVec.skipWhile f x |> ARR
+    | MAP x ->
+        PMap.toSeq x
+        |> Seq.skipWhile (fun (_, a) -> f a)
+        |> PMap.ofSeq
+        |> MAP
+    | _ -> f t |> fromBOOL
 
 let sZip f t s =
     match t, s with
@@ -478,8 +499,11 @@ let vec1 f t =
 
 let vec2 f t s =
     match t, s with
-    | Equiv _ -> zip f t s
-    | _ -> table f t s
+    | ARR _, Itr _ -> vec2 f (toSEQ t) s |> toARR
+    | Itr _, Itr _ -> sZip (vec2 f) t s
+    | Itr _, _
+    | _, Itr _ -> table (vec2 f) t s
+    | _ -> f t s
 
 let vef1 f a t =
     match t with
@@ -510,6 +534,11 @@ let eq t s =
     match t, s with
     | FN (_, x), FN (_, y) -> x = y
     | _ -> t = s
+
+let lt t s = num2 (fun x y -> fbool (x < y)) t s
+let gt t s = num2 (fun x y -> fbool (x > y)) t s
+let lteq t s = num2 (fun x y -> fbool (x <= y)) t s
+let gteq t s = num2 (fun x y -> fbool (x >= y)) t s
 
 let neg = num1 (~-)
 let neg' = str1 String.rev
@@ -614,6 +643,5 @@ let join t s =
         Seq.map string t
         |> String.intercalate (string x)
         |> STR)
-
 
 let odef = Option.defaultValue <| UN()
