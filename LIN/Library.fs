@@ -368,6 +368,7 @@ module LIB =
 
     let len = mod1 (ANY.len >> ANY.fromI)
     let dep = mod1 (ANY.dep >> ANY.fromI)
+    let flat = mod1 ANY.flat
     let isEmpty = mod1 (ANY.isEmpty >> ANY.fromBOOL)
 
     let Lget =
@@ -775,6 +776,7 @@ module LIB =
                "w>v", wvals
                "len", len
                "dep", dep
+               "flat", flat
                "[]?", isEmpty
                ":", Lget
                ":`", Lget'
